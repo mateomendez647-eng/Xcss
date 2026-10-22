@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: TP + INVISICAM + NOCLIP + FLY (xcs)
+-- HUB: TP + INVISICAM + NOCLIP + FLY + FREE CAM + VELOCIDAD
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -11,12 +11,15 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
-print("¡Script de xcs cargado correctamente!") -- Si tu amigo no ve esto, el script no se ejecutó.
-
 local tpEnabled = false
 local invisicamEnabled = false
 local noclipEnabled = false
 local flyEnabled = false
+local freeCamEnabled = false
+
+-- Variables de Velocidad
+local flySpeed = 50
+local freeCamSpeed = 50
 
 -- Variables TP
 local touchStartTime = 0
@@ -28,7 +31,12 @@ local noclipConnection = nil
 local flyConnection = nil
 local flyBodyVelocity = nil
 local flyBodyGyro = nil
-local flySpeed = 50
+
+-- Variables Free Cam
+local freeCamConnection = nil
+local freeCamRotateConnection = nil
+local camYaw, camPitch = 0, 0
+local camPos = Vector3.new(0, 0, 0)
 
 -- ==========================================
 -- INTERFAZ COMPACTA (xcs)
@@ -36,7 +44,7 @@ local flySpeed = 50
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "xcsStyleHub"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true -- Ayuda en celulares con notch
+ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local ToggleBtn = Instance.new("TextButton")
@@ -49,22 +57,16 @@ ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleBtn.TextSize = 16
 ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.Parent = ScreenGui
-local BtnCorner = Instance.new("UICorner")
-BtnCorner.CornerRadius = UDim.new(1, 0)
-BtnCorner.Parent = ToggleBtn
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
 
--- Panel Principal
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 210) 
--- Forzamos la posición al centro exacto de la pantalla
-MainFrame.Position = UDim2.new(0.5, -115, 0.5, -105)
+MainFrame.Size = UDim2.new(0, 230, 0, 250) 
+MainFrame.Position = UDim2.new(0.5, -115, 0.5, -125)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
 MainFrame.Parent = ScreenGui
-local FrameCorner = Instance.new("UICorner")
-FrameCorner.CornerRadius = UDim.new(0, 10)
-FrameCorner.Parent = MainFrame
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
 local Title = Instance.new("TextButton")
 Title.Size = UDim2.new(1, 0, 0, 30)
@@ -74,9 +76,19 @@ Title.TextColor3 = Color3.fromRGB(200, 200, 200)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 12
 Title.Parent = MainFrame
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 10)
-TitleCorner.Parent = Title
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
+
+-- Botón de Ajustes (Engranaje)
+local SettingsBtn = Instance.new("TextButton")
+SettingsBtn.Size = UDim2.new(0, 20, 0, 20)
+SettingsBtn.Position = UDim2.new(1, -25, 0, 5)
+SettingsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+SettingsBtn.Text = "⚙️"
+SettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SettingsBtn.TextSize = 12
+SettingsBtn.Font = Enum.Font.GothamBold
+SettingsBtn.Parent = Title
+Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 4)
 
 local function createSwitch(yPos, text)
     local label = Instance.new("TextLabel")
@@ -96,27 +108,99 @@ local function createSwitch(yPos, text)
     bg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     bg.Text = ""
     bg.Parent = MainFrame
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = bg
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 16, 0, 16)
     knob.Position = UDim2.new(0, 2, 0.5, -8)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.Parent = bg
-    local kCorner = Instance.new("UICorner")
-    kCorner.CornerRadius = UDim.new(1, 0)
-    kCorner.Parent = knob
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     
     return bg, knob
 end
 
-local TPSwitchBg, TPSwitchKnob = createSwitch(0.18, "TP Táctil (Móvil)")
-local SwitchBg, SwitchKnob = createSwitch(0.38, "Invisicam")
-local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(0.58, "Noclip")
-local FlySwitchBg, FlySwitchKnob = createSwitch(0.78, "Fly")
+local TPSwitchBg, TPSwitchKnob = createSwitch(0.15, "TP Táctil (Móvil)")
+local SwitchBg, SwitchKnob = createSwitch(0.32, "Invisicam")
+local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(0.49, "Noclip")
+local FlySwitchBg, FlySwitchKnob = createSwitch(0.66, "Fly")
+local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(0.83, "Free Cam")
 
+-- ==========================================
+-- PANEL DE AJUSTES (Velocidades)
+-- ==========================================
+local SettingsFrame = Instance.new("Frame")
+SettingsFrame.Size = UDim2.new(0, 230, 0, 130)
+SettingsFrame.Position = UDim2.new(0.5, -115, 0.5, 135) -- Aparece abajo del menú principal
+SettingsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+SettingsFrame.BorderSizePixel = 0
+SettingsFrame.Visible = false
+SettingsFrame.Parent = ScreenGui
+Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 10)
+
+local function createSlider(yPos, text, minVal, maxVal, defaultVal, callback)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.8, 0, 0, 20)
+    label.Position = UDim2.new(0.1, 0, yPos, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text .. " (" .. defaultVal .. ")"
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = SettingsFrame
+
+    local barBg = Instance.new("TextButton")
+    barBg.Size = UDim2.new(0.8, 0, 0, 15)
+    barBg.Position = UDim2.new(0.1, 0, yPos, 22)
+    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    barBg.Text = ""
+    barBg.Parent = SettingsFrame
+    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    fill.Parent = barBg
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local isSliding = false
+
+    barBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isSliding = true
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isSliding = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
+            fill.Size = UDim2.new(posX, 0, 1, 0)
+            
+            local val = math.floor(minVal + (maxVal - minVal) * posX)
+            label.Text = text .. " (" .. val .. ")"
+            callback(val)
+        end
+    end)
+end
+
+-- Creamos los 2 sliders (Velocidad de Fly y FreeCam)
+createSlider(0.1, "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
+createSlider(0.6, "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
+
+SettingsBtn.Activated:Connect(function()
+    SettingsFrame.Visible = not SettingsFrame.Visible
+end)
+
+-- ==========================================
+-- SISTEMA DE ARRASTRE
+-- ==========================================
 local function makeDraggable(frame)
     local dragging, dragInput, mousePos, framePos
     frame.InputBegan:Connect(function(input)
@@ -132,11 +216,19 @@ local function makeDraggable(frame)
         if input == dragInput and dragging then
             local delta = input.Position - mousePos
             frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+            
+            -- Mover el panel de ajustes si movemos el principal
+            if frame == MainFrame then
+                if SettingsFrame.Visible then
+                    SettingsFrame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset + 260)
+                end
+            end
         end
     end)
 end
 makeDraggable(MainFrame)
 makeDraggable(ToggleBtn)
+makeDraggable(SettingsFrame)
 
 -- ==========================================
 -- TP (Móvil y PC)
@@ -201,7 +293,6 @@ end)
 -- ==========================================
 local function toggleNoclip(state)
     noclipEnabled = state
-    
     if state then
         NoclipSwitchBg.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
         NoclipSwitchKnob.Position = UDim2.new(0, 20, 0.5, -8)
@@ -210,20 +301,14 @@ local function toggleNoclip(state)
             local char = LocalPlayer.Character
             if char then
                 for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") and part.CanCollide then
-                        part.CanCollide = false
-                    end
+                    if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
                 end
             end
         end)
     else
         NoclipSwitchBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         NoclipSwitchKnob.Position = UDim2.new(0, 2, 0.5, -8)
-        
-        if noclipConnection then
-            noclipConnection:Disconnect()
-            noclipConnection = nil
-        end
+        if noclipConnection then noclipConnection:Disconnect() end
         
         local char = LocalPlayer.Character
         if char then
@@ -246,9 +331,7 @@ local function getMoveDirection()
     local c = LocalPlayer.Character
     if not c then return Vector3.zero end
     local humanoid = c:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.MoveDirection.Magnitude == 0 then 
-        return Vector3.zero 
-    end
+    if not humanoid or humanoid.MoveDirection.Magnitude == 0 then return Vector3.zero end
     
     local move = Camera.CFrame:VectorToObjectSpace(humanoid.MoveDirection)
     return (Camera.CFrame * CFrame.new(move.X, 0, move.Z)).Position - Camera.CFrame.Position
@@ -256,8 +339,21 @@ end
 
 local function toggleFly(state)
     flyEnabled = state
-    
     if state then
+        if freeCamEnabled then
+            FreeCamSwitchBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            FreeCamSwitchKnob.Position = UDim2.new(0, 2, 0.5, -8)
+            freeCamEnabled = false
+            if freeCamConnection then freeCamConnection:Disconnect() end
+            if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
+            Camera.CameraType = Enum.CameraType.Custom
+            local c = LocalPlayer.Character
+            if c and c:FindFirstChild("Humanoid") then 
+                c.Humanoid.WalkSpeed = 16
+                c.Humanoid.JumpPower = 50
+            end
+        end
+
         FlySwitchBg.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
         FlySwitchKnob.Position = UDim2.new(0, 20, 0.5, -8)
         
@@ -278,13 +374,12 @@ local function toggleFly(state)
         flyBodyGyro.CFrame = hrp.CFrame
         flyBodyGyro.Parent = hrp
 
-        flyConnection = RunService.RenderStepped:Connect(function()
+        flyConnection = RunService.RenderStepped:Connect(function(dt)
             if not flyEnabled then return end
             local c = LocalPlayer.Character
             if not c or not c:FindFirstChild("HumanoidRootPart") or not flyBodyVelocity or not flyBodyGyro then return end
 
             local moveVector = Vector3.zero
-
             if UserInputService.KeyboardEnabled then
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + Camera.CFrame.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - Camera.CFrame.LookVector end
@@ -301,34 +396,117 @@ local function toggleFly(state)
             else
                 flyBodyVelocity.Velocity = Vector3.zero
             end
-
             flyBodyGyro.CFrame = Camera.CFrame
         end)
-        
     else
         FlySwitchBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         FlySwitchKnob.Position = UDim2.new(0, 2, 0.5, -8)
-        
-        if flyConnection then
-            flyConnection:Disconnect()
-            flyConnection = nil
-        end
-        
-        if flyBodyVelocity then
-            flyBodyVelocity:Destroy()
-            flyBodyVelocity = nil
-        end
-
-        if flyBodyGyro then
-            flyBodyGyro:Destroy()
-            flyBodyGyro = nil
-        end
+        if flyConnection then flyConnection:Disconnect() end
+        if flyBodyVelocity then flyBodyVelocity:Destroy() end
+        if flyBodyGyro then flyBodyGyro:Destroy() end
     end
 end
 
 FlySwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         toggleFly(not flyEnabled)
+    end
+end)
+
+-- ==========================================
+-- FREE CAM (CON VELOCIDAD DINÁMICA)
+-- ==========================================
+local function toggleFreeCam(state)
+    freeCamEnabled = state
+    if state then
+        if flyEnabled then
+            FlySwitchBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            FlySwitchKnob.Position = UDim2.new(0, 2, 0.5, -8)
+            flyEnabled = false
+            if flyConnection then flyConnection:Disconnect() end
+            if flyBodyVelocity then flyBodyVelocity:Destroy() end
+            if flyBodyGyro then flyBodyGyro:Destroy() end
+        end
+
+        FreeCamSwitchBg.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        FreeCamSwitchKnob.Position = UDim2.new(0, 20, 0.5, -8)
+        
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = 0
+            char.Humanoid.JumpPower = 0
+        end
+
+        Camera.CameraType = Enum.CameraType.Scriptable
+        local look = Camera.CFrame.LookVector
+        camYaw = math.atan2(-look.X, -look.Z)
+        camPitch = math.asin(look.Y)
+        camPos = Camera.CFrame.Position
+
+        freeCamConnection = RunService.RenderStepped:Connect(function(dt)
+            if not freeCamEnabled then return end
+
+            local moveVector = Vector3.zero
+            local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
+            
+            if UserInputService.KeyboardEnabled then
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + rot.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - rot.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector = moveVector - rot.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector = moveVector + rot.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
+            else
+                local c = LocalPlayer.Character
+                if c and c:FindFirstChild("Humanoid") then
+                    local humanoidMove = c.Humanoid.MoveDirection
+                    if humanoidMove.Magnitude > 0.1 then
+                        local move = Camera.CFrame:VectorToObjectSpace(humanoidMove)
+                        moveVector = (rot.LookVector * -move.Z) + (rot.RightVector * move.X)
+                    end
+                end
+            end
+
+            if moveVector.Magnitude > 0 then
+                camPos = camPos + (moveVector.Unit * freeCamSpeed * dt)
+            end
+
+            Camera.CFrame = CFrame.new(camPos, camPos + rot.LookVector)
+        end)
+        
+        freeCamRotateConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
+            if not freeCamEnabled or gameProcessed then return end
+            if input.UserInputType == Enum.UserInputType.Touch then
+                camYaw = camYaw - input.Delta.X * 0.005
+                camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
+            end
+        end)
+    else
+        FreeCamSwitchBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        FreeCamSwitchKnob.Position = UDim2.new(0, 2, 0.5, -8)
+        
+        if freeCamConnection then
+            freeCamConnection:Disconnect()
+            freeCamConnection = nil
+        end
+        if freeCamRotateConnection then
+            freeCamRotateConnection:Disconnect()
+            freeCamRotateConnection = nil
+        end
+        
+        Camera.CameraType = Enum.CameraType.Custom
+        
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = 16
+            char.Humanoid.JumpPower = 50
+        end
+    end
+end
+
+FreeCamSwitchBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        toggleFreeCam(not freeCamEnabled)
     end
 end)
 
@@ -370,8 +548,8 @@ TPSwitchBg.InputBegan:Connect(function(input)
     end
 end)
 
-ToggleBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        MainFrame.Visible = not MainFrame.Visible
-    end
+ToggleBtn.Activated:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+    -- Ocultar ajustes si cerramos el menú principal
+    if not MainFrame.Visible then SettingsFrame.Visible = false end
 end)
