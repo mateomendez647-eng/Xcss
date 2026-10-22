@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Botones Rápidos sin Colisión)
+-- HUB: xcs (Minimizable, UI Arreglada y Botón Maestro)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -18,7 +18,7 @@ local noclipEnabled = false
 local flyEnabled = false
 local freeCamEnabled = false
 local fullbrightEnabled = false
-local quickAccessEnabled = false
+local quickButtonsMaster = true -- Variable para el botón maestro
 
 local flySpeed = 50
 local freeCamSpeed = 50
@@ -45,25 +45,35 @@ local QuickButtons = {}
 -- ==========================================
 -- SISTEMA DE GUARDADO
 -- ==========================================
-local function saveData(name, pos)
-    if writefile then
-        local data = tostring(pos.X.Scale) .. "," .. tostring(pos.X.Offset) .. "," .. tostring(pos.Y.Scale) .. "," .. tostring(pos.Y.Offset)
-        pcall(function() writefile("xcs_" .. name .. ".txt", data) end)
-    end
+local function saveData(name, data)
+    if writefile then pcall(function() writefile("xcs_" .. name .. ".txt", tostring(data)) end) end
 end
 
-local function loadData(name, defaultPos)
+local function loadData(name, default)
     if isfile and readfile then
         local success, content = pcall(function() return readfile("xcs_" .. name .. ".txt") end)
-        if success and content then
-            local args = string.split(content, ",")
-            if #args == 4 then
-                return UDim2.new(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]), tonumber(args[4]))
-            end
+        if success and content then return content end
+    end
+    return default
+end
+
+local function savePosition(name, pos)
+    saveData(name, pos.X.Scale .. "," .. pos.X.Offset .. "," .. pos.Y.Scale .. "," .. pos.Y.Offset)
+end
+
+local function loadPosition(name, defaultPos)
+    local content = loadData(name, nil)
+    if content then
+        local args = string.split(content, ",")
+        if #args == 4 then
+            return UDim2.new(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]), tonumber(args[4]))
         end
     end
     return defaultPos
 end
+
+local function saveButtonState(btnName, state) saveData("BtnState_"..btnName, state) end
+local function loadButtonState(btnName) return loadData("BtnState_"..btnName, "true") == "true" end
 
 -- ==========================================
 -- INTERFAZ PRINCIPAL
@@ -74,21 +84,24 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(0, 45, 0, 45)
-ToggleBtn.Position = loadData("ToggleBtn", UDim2.new(0, 20, 0.4, 0))
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-ToggleBtn.BackgroundTransparency = 0.3
-ToggleBtn.Text = "TP"
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.TextSize = 16
-ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.Parent = ScreenGui
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+-- Bolita Flotante (Minimizado)
+local MiniBtn = Instance.new("TextButton")
+MiniBtn.Size = UDim2.new(0, 50, 0, 50)
+MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 20, 0.4, 0))
+MiniBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MiniBtn.Text = "xcs"
+MiniBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MiniBtn.TextSize = 14
+MiniBtn.Font = Enum.Font.GothamBlack
+MiniBtn.Visible = false
+MiniBtn.Parent = ScreenGui
+Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
+Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
+-- Panel Principal
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 330) 
-MainFrame.Position = loadData("MainFrame", UDim2.new(0.5, -115, 0.5, -165))
+MainFrame.Size = UDim2.new(0, 230, 0, 360) 
+MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -115, 0.5, -180))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
@@ -107,18 +120,43 @@ Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
 
 local SettingsBtn = Instance.new("TextButton")
 SettingsBtn.Size = UDim2.new(0, 20, 0, 20)
-SettingsBtn.Position = UDim2.new(1, -25, 0, 5)
+SettingsBtn.Position = UDim2.new(1, -50, 0, 5)
 SettingsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 SettingsBtn.Text = "⚙️"
 SettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 SettingsBtn.TextSize = 12
-SettingsBtn.Font = Enum.Font.GothamBold
 SettingsBtn.Parent = Title
 Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 4)
 
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 20, 0, 20)
+MinimizeBtn.Position = UDim2.new(1, -25, 0, 5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MinimizeBtn.Text = "X"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.TextSize = 12
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Parent = Title
+Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
+
+-- Botón Maestro de Acceso Rápido
+local MasterQuickBtn = Instance.new("TextButton")
+MasterQuickBtn.Size = UDim2.new(0.8, 0, 0, 25)
+MasterQuickBtn.Position = UDim2.new(0.1, 0, 0.87, 0)
+MasterQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+MasterQuickBtn.Text = "Ocultar Botones Rápidos"
+MasterQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MasterQuickBtn.Font = Enum.Font.GothamBold
+MasterQuickBtn.TextSize = 11
+MasterQuickBtn.Parent = MainFrame
+Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
+
+-- ==========================================
+-- PANEL DE AJUSTES (Arreglado)
+-- ==========================================
 local SettingsFrame = Instance.new("Frame")
-SettingsFrame.Size = UDim2.new(0, 230, 0, 400) 
-SettingsFrame.Position = loadData("SettingsFrame", UDim2.new(0.5, -115, 0.5, 155))
+SettingsFrame.Size = UDim2.new(0, 230, 0, 540) 
+SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0.5, -115, 0.5, 190))
 SettingsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.Visible = false
@@ -127,7 +165,7 @@ Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 10)
 
 local function createSwitch(parent, yPos, text)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.6, 0, 0, 25)
+    label.Size = UDim2.new(0.7, 0, 0, 25)
     label.Position = UDim2.new(0.06, 0, yPos, 0)
     label.BackgroundTransparency = 1
     label.Text = text
@@ -161,17 +199,6 @@ local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainFrame, 0.36, "Noclip")
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainFrame, 0.48, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainFrame, 0.60, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainFrame, 0.72, "Fullbright")
-
-local ToggleQuickBtn = Instance.new("TextButton")
-ToggleQuickBtn.Size = UDim2.new(0.8, 0, 0, 30)
-ToggleQuickBtn.Position = UDim2.new(0.1, 0, 0.85, 0)
-ToggleQuickBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-ToggleQuickBtn.Text = "Mostrar Botones Rápidos"
-ToggleQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleQuickBtn.Font = Enum.Font.GothamBold
-ToggleQuickBtn.TextSize = 11
-ToggleQuickBtn.Parent = MainFrame
-Instance.new("UICorner", ToggleQuickBtn).CornerRadius = UDim.new(0, 4)
 
 -- ==========================================
 -- LÓGICAS DE LAS FUNCIONES
@@ -389,7 +416,7 @@ local function makeDraggable(frame, saveName)
             dragging = true; mousePos = input.Position; framePos = frame.Position
             input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then 
                 dragging = false
-                if saveName then saveData(saveName, frame.Position) end
+                if saveName then savePosition(saveName, frame.Position) end
             end end)
         end
     end)
@@ -405,16 +432,16 @@ local function makeDraggable(frame, saveName)
 end
 
 makeDraggable(MainFrame, "MainFrame")
-makeDraggable(ToggleBtn, "ToggleBtn")
+makeDraggable(MiniBtn, "MiniBtn")
 makeDraggable(SettingsFrame, "SettingsFrame")
 
 -- ==========================================
--- BOTONES RÁPIDOS SIN COLISIÓN
+-- BOTONES RÁPIDOS (CON ELECCIÓN DE APARICIÓN)
 -- ==========================================
 local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 45, 0, 45)
-    btn.Position = loadData("Quick_"..name, initialPos)
+    btn.Position = loadPosition("Quick_"..name, initialPos)
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     btn.BackgroundTransparency = 0.2
     btn.Text = text
@@ -422,7 +449,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     btn.TextSize = 10
     btn.Font = Enum.Font.GothamBold
     btn.Visible = false
-    btn.Active = true -- Permite que reciba clics
+    btn.Active = true
     btn.Parent = ScreenGui
     Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
 
@@ -437,7 +464,6 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
             startPos = input.Position
             isDragging = false
             dragStartPos = input.Position
-            -- TRAER AL FRENTE: Hace que el botón que tocas esté por encima de los demás
             btn.Parent = ScreenGui 
             btn.ZIndex = 100 
         end
@@ -463,7 +489,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40)
             end
             if isDragging then
-                saveData("Quick_"..name, btn.Position) -- Guardar posición al soltar
+                savePosition("Quick_"..name, btn.Position) 
             end
             startPos = nil
             isDragging = false
@@ -485,7 +511,53 @@ createQuickBtn("FreeCam", "CAM", UDim2.new(0, 80, 0.55, 0), function() toggleFre
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 80, 0.65, 0), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
 -- ==========================================
--- BOTONES DEL MENÚ Y AJUSTES
+-- CONFIGURACIÓN DE QUÉ BOTONES APARECEN
+-- ==========================================
+local function createQuickConfig(yPos, text, btnName)
+    local bg, knob = createSwitch(SettingsFrame, yPos, text)
+    
+    local isEnabled = loadButtonState(btnName)
+    bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    knob.Position = isEnabled and UDim2.new(0, 20, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+
+    if isEnabled and QuickButtons[btnName] and quickButtonsMaster then
+        QuickButtons[btnName].Visible = true
+    end
+
+    bg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
+            
+            bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+            knob.Position = newState and UDim2.new(0, 20, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+            
+            if QuickButtons[btnName] and quickButtonsMaster then
+                QuickButtons[btnName].Visible = newState
+            end
+            saveButtonState(btnName, newState)
+        end
+    end)
+end
+
+local ConfigLabel = Instance.new("TextLabel")
+ConfigLabel.Size = UDim2.new(1, 0, 0, 20)
+ConfigLabel.Position = UDim2.new(0, 0, 0.63, 0)
+ConfigLabel.BackgroundTransparency = 1
+ConfigLabel.Text = "--- Botones en Pantalla ---"
+ConfigLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
+ConfigLabel.Font = Enum.Font.GothamBold
+ConfigLabel.TextSize = 11
+ConfigLabel.Parent = SettingsFrame
+
+createQuickConfig(0.68, "TPS Rápido", "TPS")
+createQuickConfig(0.73, "Invisicam Rápido", "Invisicam")
+createQuickConfig(0.78, "Noclip Rápido", "Noclip")
+createQuickConfig(0.83, "Fly Rápido", "Fly")
+createQuickConfig(0.88, "Free Cam Rápido", "FreeCam")
+createQuickConfig(0.93, "Fullbright Rápido", "Fullbright")
+
+-- ==========================================
+-- BOTONES DEL MENÚ Y MINIMIZAR
 -- ==========================================
 TPSwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -511,18 +583,30 @@ FullbrightSwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end
 end)
 
-ToggleBtn.Activated:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
+-- Lógica del Botón Maestro
+MasterQuickBtn.MouseButton1Click:Connect(function()
+    quickButtonsMaster = not quickButtonsMaster
+    MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    MasterQuickBtn.Text = quickButtonsMaster and "Ocultar Botones Rápidos" or "Mostrar Botones Rápidos"
+    
+    for name, btn in pairs(QuickButtons) do
+        if quickButtonsMaster then
+            btn.Visible = loadButtonState(name)
+        else
+            btn.Visible = false
+        end
+    end
 end)
 
-ToggleQuickBtn.MouseButton1Click:Connect(function()
-    quickAccessEnabled = not quickAccessEnabled
-    ToggleQuickBtn.BackgroundColor3 = quickAccessEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    ToggleQuickBtn.Text = quickAccessEnabled and "Ocultar Botones Rápidos" or "Mostrar Botones Rápidos"
-    
-    for _, btn in pairs(QuickButtons) do
-        btn.Visible = quickAccessEnabled
-    end
+-- Lógica de Minimizar y Abrir
+MinimizeBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    MiniBtn.Visible = true
+end)
+
+MiniBtn.Activated:Connect(function()
+    MainFrame.Visible = true
+    MiniBtn.Visible = false
 end)
 
 SettingsBtn.Activated:Connect(function()
@@ -629,11 +713,11 @@ local function createKeybindBox(yPos, text, keyName)
     end)
 end
 
-createKeybindBox(0.4, "Tecla Invisicam", "Invisicam")
-createKeybindBox(0.5, "Tecla Noclip", "Noclip")
-createKeybindBox(0.6, "Tecla Fly", "Fly")
-createKeybindBox(0.7, "Tecla Free Cam", "FreeCam")
-createKeybindBox(0.8, "Tecla Fullbright", "Fullbright")
+createKeybindBox(0.35, "Tecla Invisicam", "Invisicam")
+createKeybindBox(0.41, "Tecla Noclip", "Noclip")
+createKeybindBox(0.47, "Tecla Fly", "Fly")
+createKeybindBox(0.53, "Tecla Free Cam", "FreeCam")
+createKeybindBox(0.59, "Tecla Fullbright", "Fullbright")
 
 -- ==========================================
 -- TECLAS DE ACCESO RÁPIDO (KEYBINDS)
