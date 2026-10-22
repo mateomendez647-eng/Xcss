@@ -1,11 +1,12 @@
 -- ==========================================
--- HUB: TP + INVISICAM + NOCLIP + FLY + FREE CAM + VELOCIDAD
+-- HUB: TP + INVISICAM + NOCLIP + FLY + FREE CAM + FULLBRIGHT
 -- ==========================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -16,6 +17,7 @@ local invisicamEnabled = false
 local noclipEnabled = false
 local flyEnabled = false
 local freeCamEnabled = false
+local fullbrightEnabled = false
 
 -- Variables de Velocidad
 local flySpeed = 50
@@ -38,6 +40,9 @@ local freeCamRotateConnection = nil
 local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
+-- Variables Fullbright
+local savedLighting = {}
+
 -- ==========================================
 -- INTERFAZ COMPACTA (xcs)
 -- ==========================================
@@ -59,9 +64,10 @@ ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.Parent = ScreenGui
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
 
+-- Panel Principal (Ajustado para 6 switches)
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 250) 
-MainFrame.Position = UDim2.new(0.5, -115, 0.5, -125)
+MainFrame.Size = UDim2.new(0, 230, 0, 290) 
+MainFrame.Position = UDim2.new(0.5, -115, 0.5, -145)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
@@ -120,18 +126,19 @@ local function createSwitch(yPos, text)
     return bg, knob
 end
 
-local TPSwitchBg, TPSwitchKnob = createSwitch(0.15, "TP Táctil (Móvil)")
-local SwitchBg, SwitchKnob = createSwitch(0.32, "Invisicam")
-local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(0.49, "Noclip")
-local FlySwitchBg, FlySwitchKnob = createSwitch(0.66, "Fly")
-local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(0.83, "Free Cam")
+local TPSwitchBg, TPSwitchKnob = createSwitch(0.13, "TP Táctil (Móvil)")
+local SwitchBg, SwitchKnob = createSwitch(0.27, "Invisicam")
+local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(0.41, "Noclip")
+local FlySwitchBg, FlySwitchKnob = createSwitch(0.55, "Fly")
+local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(0.69, "Free Cam")
+local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(0.83, "Fullbright")
 
 -- ==========================================
 -- PANEL DE AJUSTES (Velocidades)
 -- ==========================================
 local SettingsFrame = Instance.new("Frame")
 SettingsFrame.Size = UDim2.new(0, 230, 0, 130)
-SettingsFrame.Position = UDim2.new(0.5, -115, 0.5, 135) -- Aparece abajo del menú principal
+SettingsFrame.Position = UDim2.new(0.5, -115, 0.5, 155) -- Aparece abajo del menú principal
 SettingsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.Visible = false
@@ -190,7 +197,6 @@ local function createSlider(yPos, text, minVal, maxVal, defaultVal, callback)
     end)
 end
 
--- Creamos los 2 sliders (Velocidad de Fly y FreeCam)
 createSlider(0.1, "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
 createSlider(0.6, "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 
@@ -217,11 +223,8 @@ local function makeDraggable(frame)
             local delta = input.Position - mousePos
             frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
             
-            -- Mover el panel de ajustes si movemos el principal
-            if frame == MainFrame then
-                if SettingsFrame.Visible then
-                    SettingsFrame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset + 260)
-                end
+            if frame == MainFrame and SettingsFrame.Visible then
+                SettingsFrame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset + 300)
             end
         end
     end)
@@ -321,6 +324,52 @@ end
 NoclipSwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         toggleNoclip(not noclipEnabled)
+    end
+end)
+
+-- ==========================================
+-- FULLBRIGHT
+-- ==========================================
+local function toggleFullbright(state)
+    fullbrightEnabled = state
+    if state then
+        FullbrightSwitchBg.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        FullbrightSwitchKnob.Position = UDim2.new(0, 20, 0.5, -8)
+        
+        -- Guardar la iluminación original
+        savedLighting.Ambient = Lighting.Ambient
+        savedLighting.OutdoorAmbient = Lighting.OutdoorAmbient
+        savedLighting.Brightness = Lighting.Brightness
+        savedLighting.ClockTime = Lighting.ClockTime
+        savedLighting.FogEnd = Lighting.FogEnd
+        savedLighting.GlobalShadows = Lighting.GlobalShadows
+
+        -- Aplicar Fullbright
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 12 -- Mediodía
+        Lighting.FogEnd = 1000000
+        Lighting.GlobalShadows = false
+    else
+        FullbrightSwitchBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        FullbrightSwitchKnob.Position = UDim2.new(0, 2, 0.5, -8)
+        
+        -- Restaurar iluminación original
+        if savedLighting.Ambient then
+            Lighting.Ambient = savedLighting.Ambient
+            Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
+            Lighting.Brightness = savedLighting.Brightness
+            Lighting.ClockTime = savedLighting.ClockTime
+            Lighting.FogEnd = savedLighting.FogEnd
+            Lighting.GlobalShadows = savedLighting.GlobalShadows
+        end
+    end
+end
+
+FullbrightSwitchBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        toggleFullbright(not fullbrightEnabled)
     end
 end)
 
@@ -550,6 +599,5 @@ end)
 
 ToggleBtn.Activated:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
-    -- Ocultar ajustes si cerramos el menú principal
     if not MainFrame.Visible then SettingsFrame.Visible = false end
 end)
