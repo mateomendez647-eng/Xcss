@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Minimizable, UI Arreglada y Botón Maestro)
+-- HUB: xcs (Sin barra de ajustes, arrastre limpio)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -18,7 +18,7 @@ local noclipEnabled = false
 local flyEnabled = false
 local freeCamEnabled = false
 local fullbrightEnabled = false
-local quickButtonsMaster = true -- Variable para el botón maestro
+local quickButtonsMaster = true
 
 local flySpeed = 50
 local freeCamSpeed = 50
@@ -38,7 +38,7 @@ local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
 local savedLighting = {}
-local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = Enum.KeyCode.Z, FreeCam = Enum.KeyCode.C, Fullbright = Enum.KeyCode.B }
+local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = Enum.KeyCode.Z, FreeCam = Enum.KeyCode.C, Fullbright = Enum.KeyCode.B, Teleport = Enum.KeyCode.G }
 local listeningFor = nil
 local QuickButtons = {}
 
@@ -84,7 +84,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Bolita Flotante (Minimizado)
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 50, 0, 50)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 20, 0.4, 0))
@@ -98,7 +97,6 @@ MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
--- Panel Principal
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 360) 
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -115, 0.5, -180))
@@ -139,7 +137,6 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.Parent = Title
 Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
 
--- Botón Maestro de Acceso Rápido
 local MasterQuickBtn = Instance.new("TextButton")
 MasterQuickBtn.Size = UDim2.new(0.8, 0, 0, 25)
 MasterQuickBtn.Position = UDim2.new(0.1, 0, 0.87, 0)
@@ -152,16 +149,39 @@ MasterQuickBtn.Parent = MainFrame
 Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
 
 -- ==========================================
--- PANEL DE AJUSTES (Arreglado)
+-- PANEL DE AJUSTES (TUERCA) - SIN BARRA EXTRA
 -- ==========================================
 local SettingsFrame = Instance.new("Frame")
-SettingsFrame.Size = UDim2.new(0, 230, 0, 540) 
-SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0.5, -115, 0.5, 190))
+SettingsFrame.Size = UDim2.new(0, 230, 0, 380) 
+SettingsFrame.Position = UDim2.new(0.5, -115, 0.5, -190) 
 SettingsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.Visible = false
 SettingsFrame.Parent = ScreenGui
 Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 10)
+
+-- Botón para Cerrar el panel (Arriba a la derecha)
+local CloseSettingsBtn = Instance.new("TextButton")
+CloseSettingsBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseSettingsBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseSettingsBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+CloseSettingsBtn.Text = "X"
+CloseSettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseSettingsBtn.Font = Enum.Font.GothamBold
+CloseSettingsBtn.TextSize = 12
+CloseSettingsBtn.ZIndex = 5
+CloseSettingsBtn.Parent = SettingsFrame
+Instance.new("UICorner", CloseSettingsBtn).CornerRadius = UDim.new(0, 4)
+
+local SettingsScroll = Instance.new("ScrollingFrame")
+SettingsScroll.Size = UDim2.new(1, 0, 1, 0)
+SettingsScroll.Position = UDim2.new(0, 0, 0, 0)
+SettingsScroll.BackgroundTransparency = 1
+SettingsScroll.BorderSizePixel = 0
+SettingsScroll.ScrollBarThickness = 4
+SettingsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
+SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 800) 
+SettingsScroll.Parent = SettingsFrame
 
 local function createSwitch(parent, yPos, text)
     local label = Instance.new("TextLabel")
@@ -433,7 +453,8 @@ end
 
 makeDraggable(MainFrame, "MainFrame")
 makeDraggable(MiniBtn, "MiniBtn")
-makeDraggable(SettingsFrame, "SettingsFrame")
+-- Al no tener barra, arrastramos el SettingsFrame desde su fondo negro
+makeDraggable(SettingsFrame, "SettingsFrame") 
 
 -- ==========================================
 -- BOTONES RÁPIDOS (CON ELECCIÓN DE APARICIÓN)
@@ -511,10 +532,10 @@ createQuickBtn("FreeCam", "CAM", UDim2.new(0, 80, 0.55, 0), function() toggleFre
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 80, 0.65, 0), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
 -- ==========================================
--- CONFIGURACIÓN DE QUÉ BOTONES APARECEN
+-- CONFIGURACIÓN DE QUÉ BOTONES APARECEN (CON SCROLL)
 -- ==========================================
 local function createQuickConfig(yPos, text, btnName)
-    local bg, knob = createSwitch(SettingsFrame, yPos, text)
+    local bg, knob = createSwitch(SettingsScroll, yPos, text)
     
     local isEnabled = loadButtonState(btnName)
     bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -541,20 +562,20 @@ end
 
 local ConfigLabel = Instance.new("TextLabel")
 ConfigLabel.Size = UDim2.new(1, 0, 0, 20)
-ConfigLabel.Position = UDim2.new(0, 0, 0.63, 0)
+ConfigLabel.Position = UDim2.new(0, 0, 0.65, 0)
 ConfigLabel.BackgroundTransparency = 1
 ConfigLabel.Text = "--- Botones en Pantalla ---"
 ConfigLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
 ConfigLabel.Font = Enum.Font.GothamBold
 ConfigLabel.TextSize = 11
-ConfigLabel.Parent = SettingsFrame
+ConfigLabel.Parent = SettingsScroll
 
-createQuickConfig(0.68, "TPS Rápido", "TPS")
-createQuickConfig(0.73, "Invisicam Rápido", "Invisicam")
-createQuickConfig(0.78, "Noclip Rápido", "Noclip")
-createQuickConfig(0.83, "Fly Rápido", "Fly")
-createQuickConfig(0.88, "Free Cam Rápido", "FreeCam")
-createQuickConfig(0.93, "Fullbright Rápido", "Fullbright")
+createQuickConfig(0.70, "TPS Rápido", "TPS")
+createQuickConfig(0.75, "Invisicam Rápido", "Invisicam")
+createQuickConfig(0.80, "Noclip Rápido", "Noclip")
+createQuickConfig(0.85, "Fly Rápido", "Fly")
+createQuickConfig(0.90, "Free Cam Rápido", "FreeCam")
+createQuickConfig(0.95, "Fullbright Rápido", "Fullbright")
 
 -- ==========================================
 -- BOTONES DEL MENÚ Y MINIMIZAR
@@ -583,7 +604,6 @@ FullbrightSwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end
 end)
 
--- Lógica del Botón Maestro
 MasterQuickBtn.MouseButton1Click:Connect(function()
     quickButtonsMaster = not quickButtonsMaster
     MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -598,7 +618,6 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Lógica de Minimizar y Abrir
 MinimizeBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
     MiniBtn.Visible = true
@@ -610,11 +629,16 @@ MiniBtn.Activated:Connect(function()
 end)
 
 SettingsBtn.Activated:Connect(function()
+    SettingsFrame.Position = UDim2.new(0.5, -115, 0.5, -190)
     SettingsFrame.Visible = not SettingsFrame.Visible
 end)
 
+CloseSettingsBtn.MouseButton1Click:Connect(function()
+    SettingsFrame.Visible = false
+end)
+
 -- ==========================================
--- PANEL DE AJUSTES (Velocidades y Keybinds)
+-- PANEL DE AJUSTES (Velocidades y Keybinds) CON SCROLL
 -- ==========================================
 local function createSlider(parent, yPos, text, minVal, maxVal, defaultVal, callback)
     local label = Instance.new("TextLabel")
@@ -668,8 +692,8 @@ local function createSlider(parent, yPos, text, minVal, maxVal, defaultVal, call
     end)
 end
 
-createSlider(SettingsFrame, 0.05, "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
-createSlider(SettingsFrame, 0.2, "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
+createSlider(SettingsScroll, 0.05, "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
+createSlider(SettingsScroll, 0.12, "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 
 local function createKeybindBox(yPos, text, keyName)
     local label = Instance.new("TextLabel")
@@ -681,7 +705,7 @@ local function createKeybindBox(yPos, text, keyName)
     label.Font = Enum.Font.Gotham
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = SettingsFrame
+    label.Parent = SettingsScroll
 
     local box = Instance.new("TextButton")
     box.Size = UDim2.new(0.3, 0, 0, 25)
@@ -691,7 +715,7 @@ local function createKeybindBox(yPos, text, keyName)
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
     box.Font = Enum.Font.GothamBold
     box.TextSize = 12
-    box.Parent = SettingsFrame
+    box.Parent = SettingsScroll
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
 
     box.MouseButton1Click:Connect(function()
@@ -713,14 +737,15 @@ local function createKeybindBox(yPos, text, keyName)
     end)
 end
 
-createKeybindBox(0.35, "Tecla Invisicam", "Invisicam")
-createKeybindBox(0.41, "Tecla Noclip", "Noclip")
-createKeybindBox(0.47, "Tecla Fly", "Fly")
-createKeybindBox(0.53, "Tecla Free Cam", "FreeCam")
-createKeybindBox(0.59, "Tecla Fullbright", "Fullbright")
+createKeybindBox(0.22, "Tecla Invisicam", "Invisicam")
+createKeybindBox(0.28, "Tecla Noclip", "Noclip")
+createKeybindBox(0.34, "Tecla Fly", "Fly")
+createKeybindBox(0.40, "Tecla Free Cam", "FreeCam")
+createKeybindBox(0.46, "Tecla Fullbright", "Fullbright")
+createKeybindBox(0.52, "Tecla TP (PC)", "Teleport") 
 
 -- ==========================================
--- TECLAS DE ACCESO RÁPIDO (KEYBINDS)
+-- TECLAS DE ACCESO RÁPIDO (KEYBINDS) Y TP PC
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
@@ -732,22 +757,31 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.Fly then toggleFly(not flyEnabled) end
         if input.KeyCode == keybinds.FreeCam then toggleFreeCam(not freeCamEnabled) end
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
+        
+        -- TP Instantáneo en PC
+        if input.KeyCode == keybinds.Teleport and tpEnabled then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local ray = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+                local params = RaycastParams.new()
+                params.FilterDescendantsInstances = {char}
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+                if result then
+                    char.HumanoidRootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+                end
+            end
+        end
     end
 end)
 
 -- ==========================================
--- TP TÁCTIL Y TECLADO (T)
+-- TP TÁCTIL (Solo Android / Móvil)
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
         touchStartTime = tick(); touchStartPos = input.Position; isDraggingCamera = false
-    end
-    if input.KeyCode == Enum.KeyCode.T then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = CFrame.new(Mouse.Hit.Position + Vector3.new(0, 3, 0))
-        end
     end
 end)
 
