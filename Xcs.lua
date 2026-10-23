@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Sin barra de ajustes, arrastre limpio)
+-- HUB: xcs (Invisicam y X-Ray Arreglados)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -14,6 +14,7 @@ local Mouse = LocalPlayer:GetMouse()
 
 local tpEnabled = false
 local invisicamEnabled = false
+local fpXRayEnabled = false
 local noclipEnabled = false
 local flyEnabled = false
 local freeCamEnabled = false
@@ -31,6 +32,9 @@ local noclipConnection = nil
 local flyConnection = nil
 local flyBodyVelocity = nil
 local flyBodyGyro = nil
+local fpXRayConnection = nil
+local invisicamConnection = nil
+local transparentParts = {}
 
 local freeCamConnection = nil
 local freeCamRotateConnection = nil
@@ -38,7 +42,7 @@ local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
 local savedLighting = {}
-local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = Enum.KeyCode.Z, FreeCam = Enum.KeyCode.C, Fullbright = Enum.KeyCode.B, Teleport = Enum.KeyCode.G }
+local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = Enum.KeyCode.Z, FreeCam = Enum.KeyCode.C, Fullbright = Enum.KeyCode.B, Teleport = Enum.KeyCode.G, XRay = Enum.KeyCode.K }
 local listeningFor = nil
 local QuickButtons = {}
 
@@ -98,8 +102,8 @@ Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 360) 
-MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -115, 0.5, -180))
+MainFrame.Size = UDim2.new(0, 230, 0, 420) 
+MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -115, 0.5, -210))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
@@ -139,7 +143,7 @@ Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
 
 local MasterQuickBtn = Instance.new("TextButton")
 MasterQuickBtn.Size = UDim2.new(0.8, 0, 0, 25)
-MasterQuickBtn.Position = UDim2.new(0.1, 0, 0.87, 0)
+MasterQuickBtn.Position = UDim2.new(0.1, 0, 0.89, 0)
 MasterQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 MasterQuickBtn.Text = "Ocultar Botones Rápidos"
 MasterQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -149,7 +153,7 @@ MasterQuickBtn.Parent = MainFrame
 Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
 
 -- ==========================================
--- PANEL DE AJUSTES (TUERCA) - SIN BARRA EXTRA
+-- PANEL DE AJUSTES (TUERCA)
 -- ==========================================
 local SettingsFrame = Instance.new("Frame")
 SettingsFrame.Size = UDim2.new(0, 230, 0, 380) 
@@ -160,7 +164,6 @@ SettingsFrame.Visible = false
 SettingsFrame.Parent = ScreenGui
 Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 10)
 
--- Botón para Cerrar el panel (Arriba a la derecha)
 local CloseSettingsBtn = Instance.new("TextButton")
 CloseSettingsBtn.Size = UDim2.new(0, 30, 0, 30)
 CloseSettingsBtn.Position = UDim2.new(1, -35, 0, 5)
@@ -180,7 +183,7 @@ SettingsScroll.BackgroundTransparency = 1
 SettingsScroll.BorderSizePixel = 0
 SettingsScroll.ScrollBarThickness = 4
 SettingsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 800) 
+SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 850) 
 SettingsScroll.Parent = SettingsFrame
 
 local function createSwitch(parent, yPos, text)
@@ -213,12 +216,13 @@ local function createSwitch(parent, yPos, text)
     return bg, knob
 end
 
-local TPSwitchBg, TPSwitchKnob = createSwitch(MainFrame, 0.12, "TPS")
-local SwitchBg, SwitchKnob = createSwitch(MainFrame, 0.24, "Invisicam")
-local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainFrame, 0.36, "Noclip")
-local FlySwitchBg, FlySwitchKnob = createSwitch(MainFrame, 0.48, "Fly")
-local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainFrame, 0.60, "Free Cam")
-local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainFrame, 0.72, "Fullbright")
+local TPSwitchBg, TPSwitchKnob = createSwitch(MainFrame, 0.09, "TPS")
+local SwitchBg, SwitchKnob = createSwitch(MainFrame, 0.19, "Invisicam")
+local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainFrame, 0.29, "FP X-Ray (Ver Paredes)")
+local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainFrame, 0.39, "Noclip")
+local FlySwitchBg, FlySwitchKnob = createSwitch(MainFrame, 0.49, "Fly")
+local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainFrame, 0.59, "Free Cam")
+local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainFrame, 0.69, "Fullbright")
 
 -- ==========================================
 -- LÓGICAS DE LAS FUNCIONES
@@ -245,6 +249,105 @@ local function toggleNoclip(state)
             local hrp = char:FindFirstChild("HumanoidRootPart")
             if hrp then hrp.CanCollide = true end
         end
+    end
+end
+
+-- FUNCIÓN INVISICAM CORREGIDA (Evita que jugadores se vuelvan invisibles)
+local function toggleInvisicam(state)
+    invisicamEnabled = state
+    SwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    SwitchKnob.Position = state and UDim2.new(0, 20, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+
+    if state then
+        pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
+        
+        invisicamConnection = RunService.Stepped:Connect(function()
+            -- Recorremos todos los jugadores para evitar que sus cuerpos se vuelvan invisibles
+            for _, player in ipairs(Players:GetPlayers()) do
+                local char = player.Character
+                if char then
+                    for _, part in ipairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                            if part.Transparency > 0 then -- Si se volvió invisible, lo forzamos a visible
+                                part.Transparency = 0
+                            end
+                        elseif part:IsA("Decal") or part:IsA("Texture") then
+                            if part.Transparency > 0 then
+                                part.Transparency = 0
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
+        if invisicamConnection then invisicamConnection:Disconnect() end
+    end
+end
+
+-- FUNCIÓN FP X-RAY
+local function toggleFPXRay(state)
+    fpXRayEnabled = state
+    FPXRaySwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    FPXRaySwitchKnob.Position = state and UDim2.new(0, 20, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    
+    if state then
+        fpXRayConnection = RunService.RenderStepped:Connect(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            
+            for _, data in ipairs(transparentParts) do
+                if data.part and data.part.Parent then
+                    data.part.Transparency = data.trans
+                end
+            end
+            transparentParts = {}
+            
+            local filterList = {char, Camera}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character then
+                    table.insert(filterList, p.Character)
+                end
+            end
+            
+            local rayOrigin = Camera.CFrame.Position
+            local rayDirection = Camera.CFrame.LookVector * 250
+            
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = filterList
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            
+            local currentOrigin = rayOrigin
+            
+            for i = 1, 5 do
+                local result = Workspace:Raycast(currentOrigin, rayDirection, rayParams)
+                
+                if result and result.Instance then
+                    local hitPart = result.Instance
+                    
+                    if hitPart:IsA("BasePart") and not hitPart:FindFirstAncestorOfClass("Accessory") and not hitPart.Parent:FindFirstChildOfClass("Humanoid") then
+                        if hitPart.Transparency < 0.7 then
+                            table.insert(transparentParts, {part = hitPart, trans = hitPart.Transparency})
+                            hitPart.Transparency = 0.7
+                        end
+                    end
+                    currentOrigin = result.Position + rayDirection.Unit * 0.1
+                else
+                    break
+                end
+            end
+        end)
+    else
+        if fpXRayConnection then fpXRayConnection:Disconnect() end
+        for _, data in ipairs(transparentParts) do
+            if data.part and data.part.Parent then
+                data.part.Transparency = data.trans
+            end
+        end
+        transparentParts = {}
     end
 end
 
@@ -413,19 +516,6 @@ local function toggleFreeCam(state)
     end
 end
 
-local function toggleInvisicam(state)
-    invisicamEnabled = state
-    SwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    SwitchKnob.Position = state and UDim2.new(0, 20, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
-
-    if state then
-        pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
-    else
-        pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
-    end
-end
-
 -- ==========================================
 -- SISTEMA DE ARRASTRE CON GUARDADO
 -- ==========================================
@@ -453,11 +543,10 @@ end
 
 makeDraggable(MainFrame, "MainFrame")
 makeDraggable(MiniBtn, "MiniBtn")
--- Al no tener barra, arrastramos el SettingsFrame desde su fondo negro
 makeDraggable(SettingsFrame, "SettingsFrame") 
 
 -- ==========================================
--- BOTONES RÁPIDOS (CON ELECCIÓN DE APARICIÓN)
+-- BOTONES RÁPIDOS
 -- ==========================================
 local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     local btn = Instance.new("TextButton")
@@ -526,13 +615,14 @@ createQuickBtn("TPS", "TPS", UDim2.new(0, 80, 0.15, 0), function()
 end, function() return tpEnabled end)
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 80, 0.25, 0), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
-createQuickBtn("Noclip", "NOC", UDim2.new(0, 80, 0.35, 0), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
-createQuickBtn("Fly", "FLY", UDim2.new(0, 80, 0.45, 0), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
-createQuickBtn("FreeCam", "CAM", UDim2.new(0, 80, 0.55, 0), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
-createQuickBtn("Fullbright", "LGT", UDim2.new(0, 80, 0.65, 0), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
+createQuickBtn("FPXRay", "XRY", UDim2.new(0, 80, 0.35, 0), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
+createQuickBtn("Noclip", "NOC", UDim2.new(0, 80, 0.45, 0), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
+createQuickBtn("Fly", "FLY", UDim2.new(0, 80, 0.55, 0), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
+createQuickBtn("FreeCam", "CAM", UDim2.new(0, 80, 0.65, 0), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
+createQuickBtn("Fullbright", "LGT", UDim2.new(0, 80, 0.75, 0), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
 -- ==========================================
--- CONFIGURACIÓN DE QUÉ BOTONES APARECEN (CON SCROLL)
+-- CONFIGURACIÓN DE QUÉ BOTONES APARECEN
 -- ==========================================
 local function createQuickConfig(yPos, text, btnName)
     local bg, knob = createSwitch(SettingsScroll, yPos, text)
@@ -572,10 +662,11 @@ ConfigLabel.Parent = SettingsScroll
 
 createQuickConfig(0.70, "TPS Rápido", "TPS")
 createQuickConfig(0.75, "Invisicam Rápido", "Invisicam")
-createQuickConfig(0.80, "Noclip Rápido", "Noclip")
-createQuickConfig(0.85, "Fly Rápido", "Fly")
-createQuickConfig(0.90, "Free Cam Rápido", "FreeCam")
-createQuickConfig(0.95, "Fullbright Rápido", "Fullbright")
+createQuickConfig(0.80, "FP X-Ray Rápido", "FPXRay")
+createQuickConfig(0.85, "Noclip Rápido", "Noclip")
+createQuickConfig(0.90, "Fly Rápido", "Fly")
+createQuickConfig(0.95, "Free Cam Rápido", "FreeCam")
+createQuickConfig(1.00, "Fullbright Rápido", "Fullbright")
 
 -- ==========================================
 -- BOTONES DEL MENÚ Y MINIMIZAR
@@ -590,6 +681,9 @@ TPSwitchBg.InputBegan:Connect(function(input)
 end)
 SwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end
+end)
+FPXRaySwitchBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFPXRay(not fpXRayEnabled) end
 end)
 NoclipSwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end
@@ -638,7 +732,7 @@ CloseSettingsBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- PANEL DE AJUSTES (Velocidades y Keybinds) CON SCROLL
+-- PANEL DE AJUSTES (Velocidades y Keybinds)
 -- ==========================================
 local function createSlider(parent, yPos, text, minVal, maxVal, defaultVal, callback)
     local label = Instance.new("TextLabel")
@@ -742,7 +836,8 @@ createKeybindBox(0.28, "Tecla Noclip", "Noclip")
 createKeybindBox(0.34, "Tecla Fly", "Fly")
 createKeybindBox(0.40, "Tecla Free Cam", "FreeCam")
 createKeybindBox(0.46, "Tecla Fullbright", "Fullbright")
-createKeybindBox(0.52, "Tecla TP (PC)", "Teleport") 
+createKeybindBox(0.52, "Tecla X-Ray", "XRay")
+createKeybindBox(0.58, "Tecla TP (PC)", "Teleport") 
 
 -- ==========================================
 -- TECLAS DE ACCESO RÁPIDO (KEYBINDS) Y TP PC
@@ -757,6 +852,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.Fly then toggleFly(not flyEnabled) end
         if input.KeyCode == keybinds.FreeCam then toggleFreeCam(not freeCamEnabled) end
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
+        if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
         
         -- TP Instantáneo en PC
         if input.KeyCode == keybinds.Teleport and tpEnabled then
