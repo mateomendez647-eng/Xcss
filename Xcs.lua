@@ -19,7 +19,7 @@ local noclipEnabled = false
 local flyEnabled = false
 local freeCamEnabled = false
 local fullbrightEnabled = false
-local deleteModeEnabled = false 
+local deleteModeEnabled = false
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -36,7 +36,7 @@ local flyBodyGyro = nil
 local fpXRayConnection = nil
 local invisicamConnection = nil
 local transparentParts = {}
-local deletedPartsMemory = {} 
+local deletedPartsMemory = {}
 
 local freeCamConnection = nil
 local freeCamRotateConnection = nil
@@ -47,6 +47,18 @@ local savedLighting = {}
 local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = Enum.KeyCode.Z, FreeCam = Enum.KeyCode.C, Fullbright = Enum.KeyCode.B, Teleport = Enum.KeyCode.G, XRay = Enum.KeyCode.K, Delete = Enum.KeyCode.L, Restore = Enum.KeyCode.R }
 local listeningFor = nil
 local QuickButtons = {}
+
+-- Cache del PlayerModule para leer el stick móvil sin WalkSpeed
+local playerControls = nil
+task.spawn(function()
+    local ok, playerModule = pcall(function()
+        return require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule", 10))
+    end)
+    if ok and playerModule then
+        local ok2, controls = pcall(function() return playerModule:GetControls() end)
+        if ok2 then playerControls = controls end
+    end
+end)
 
 -- ==========================================
 -- SISTEMA DE GUARDADO
@@ -72,14 +84,17 @@ local function loadPosition(name, defaultPos)
     if content then
         local args = string.split(content, ",")
         if #args == 4 then
-            return UDim2.new(tonumber(args[1]), tonumber(args[2]), tonumber(args[3]), tonumber(args[4]))
+            local xS, xO, yS, yO = tonumber(args[1]), tonumber(args[2]), tonumber(args[3]), tonumber(args[4])
+            if xS and xO and yS and yO then
+                return UDim2.new(xS, xO, yS, yO)
+            end
         end
     end
     return defaultPos
 end
 
-local function saveButtonState(btnName, state) saveData("BtnState_"..btnName, state) end
-local function loadButtonState(btnName) return loadData("BtnState_"..btnName, "true") == "true" end
+local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, state) end
+local function loadButtonState(btnName) return loadData("BtnState_" .. btnName, "true") == "true" end
 
 -- ==========================================
 -- INTERFAZ PRINCIPAL COMPACTA CON SCROLL
@@ -106,7 +121,7 @@ Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
 -- Panel Principal
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 180, 0, 300) 
+MainFrame.Size = UDim2.new(0, 180, 0, 300)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -90, 0.5, -150))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
@@ -125,7 +140,6 @@ Title.TextSize = 11
 Title.Parent = MainFrame
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
--- Botón Master (Movido arriba a la derecha)
 local MasterQuickBtn = Instance.new("TextButton")
 MasterQuickBtn.Size = UDim2.new(0, 18, 0, 18)
 MasterQuickBtn.Position = UDim2.new(1, -68, 0, 3)
@@ -165,7 +179,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 300) 
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 300)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, yPos, text)
@@ -194,14 +208,14 @@ local function createSwitch(parent, yPos, text)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.Parent = bg
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-    
+
     return bg, knob
 end
 
 local TPSwitchBg, TPSwitchKnob = createSwitch(MainScroll, 0.05, "TPS")
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, 0.15, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, 0.25, "FP X-Ray")
-local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, 0.35, "Borrador de Paredes") 
+local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, 0.35, "Borrador de Paredes")
 local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, 0.45, "Noclip")
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, 0.55, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, 0.65, "Free Cam")
@@ -211,8 +225,8 @@ local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, 0.75, 
 -- PANEL DE AJUSTES (TUERCA)
 -- ==========================================
 local SettingsFrame = Instance.new("Frame")
-SettingsFrame.Size = UDim2.new(0, 180, 0, 300) 
-SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0.5, -90, 0.5, -150)) 
+SettingsFrame.Size = UDim2.new(0, 180, 0, 300)
+SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0.5, -90, 0.5, -150))
 SettingsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.Visible = false
@@ -238,7 +252,7 @@ SettingsScroll.BackgroundTransparency = 1
 SettingsScroll.BorderSizePixel = 0
 SettingsScroll.ScrollBarThickness = 3
 SettingsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 700) 
+SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 700)
 SettingsScroll.Parent = SettingsFrame
 
 -- ==========================================
@@ -251,20 +265,26 @@ local function toggleNoclip(state)
     if QuickButtons["Noclip"] then QuickButtons["Noclip"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
 
     if state then
+        if noclipConnection then noclipConnection:Disconnect() end
         noclipConnection = RunService.Stepped:Connect(function()
             local char = LocalPlayer.Character
-            if char then
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+            if not char then return end
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
+                    if part.CanCollide then part.CanCollide = false end
                 end
             end
         end)
     else
         if noclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = nil
         local char = LocalPlayer.Character
         if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.CanCollide = true end
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
+                    part.CanCollide = true
+                end
+            end
         end
     end
 end
@@ -273,11 +293,11 @@ local function toggleDeleteMode(state)
     deleteModeEnabled = state
     DeleteSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     DeleteSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    
+
     if state then
-        MainFrame.BackgroundTransparency = 0.5 
+        MainFrame.BackgroundTransparency = 0.5
     else
-        MainFrame.BackgroundTransparency = 0 
+        MainFrame.BackgroundTransparency = 0
     end
 end
 
@@ -288,7 +308,7 @@ local function RestoreMap()
             data.part.CanCollide = data.collide
         end
     end
-    deletedPartsMemory = {} 
+    deletedPartsMemory = {}
 end
 
 local function toggleInvisicam(state)
@@ -299,7 +319,7 @@ local function toggleInvisicam(state)
 
     if state then
         pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
-        
+
         invisicamConnection = RunService.Stepped:Connect(function()
             for _, player in ipairs(Players:GetPlayers()) do
                 local char = player.Character
@@ -325,30 +345,30 @@ local function toggleFPXRay(state)
     FPXRaySwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     FPXRaySwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
     if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
-    
+
     if state then
         fpXRayConnection = RunService.RenderStepped:Connect(function()
             local char = LocalPlayer.Character
             if not char then return end
-            
+
             for _, data in ipairs(transparentParts) do
                 if data.part and data.part.Parent then data.part.Transparency = data.trans end
             end
             transparentParts = {}
-            
+
             local filterList = {char, Camera}
             for _, p in ipairs(Players:GetPlayers()) do
                 if p.Character then table.insert(filterList, p.Character) end
             end
-            
+
             local rayOrigin = Camera.CFrame.Position
             local rayDirection = Camera.CFrame.LookVector * 250
             local rayParams = RaycastParams.new()
             rayParams.FilterDescendantsInstances = filterList
             rayParams.FilterType = Enum.RaycastFilterType.Exclude
-            
+
             local currentOrigin = rayOrigin
-            
+
             for i = 1, 5 do
                 local result = Workspace:Raycast(currentOrigin, rayDirection, rayParams)
                 if result and result.Instance then
@@ -477,6 +497,7 @@ local function toggleFreeCam(state)
 
     if state then
         if flyEnabled then toggleFly(false) end
+
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = 0
@@ -493,7 +514,7 @@ local function toggleFreeCam(state)
             if not freeCamEnabled then return end
             local moveVector = Vector3.zero
             local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
-            
+
             if UserInputService.KeyboardEnabled then
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + rot.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - rot.LookVector end
@@ -502,13 +523,14 @@ local function toggleFreeCam(state)
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
                 if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
             else
-                local c = LocalPlayer.Character
-                if c and c:FindFirstChild("Humanoid") then
-                    local humanoidMove = c.Humanoid.MoveDirection
-                    if humanoidMove.Magnitude > 0.1 then
-                        local move = Camera.CFrame:VectorToObjectSpace(humanoidMove)
-                        moveVector = (rot.LookVector * -move.Z) + (rot.RightVector * move.X)
-                    end
+                local stick = Vector3.zero
+                if playerControls then
+                    local ok, mv = pcall(function() return playerControls:GetMoveVector() end)
+                    if ok and mv then stick = mv end
+                end
+
+                if stick.Magnitude > 0.1 then
+                    moveVector = (rot.LookVector * -stick.Z) + (rot.RightVector * stick.X)
                 end
             end
 
@@ -517,7 +539,8 @@ local function toggleFreeCam(state)
             end
             Camera.CFrame = CFrame.new(camPos, camPos + rot.LookVector)
         end)
-        
+
+        if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
         freeCamRotateConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
             if not freeCamEnabled or gameProcessed then return end
             if input.UserInputType == Enum.UserInputType.Touch then
@@ -528,6 +551,8 @@ local function toggleFreeCam(state)
     else
         if freeCamConnection then freeCamConnection:Disconnect() end
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
+        freeCamConnection = nil
+        freeCamRotateConnection = nil
         Camera.CameraType = Enum.CameraType.Custom
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
@@ -545,7 +570,7 @@ local function makeDraggable(frame, saveName)
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; mousePos = input.Position; framePos = frame.Position
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then 
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
                 if saveName then savePosition(saveName, frame.Position) end
             end end)
@@ -564,7 +589,7 @@ end
 
 makeDraggable(MainFrame, "MainFrame")
 makeDraggable(MiniBtn, "MiniBtn")
-makeDraggable(SettingsFrame, "SettingsFrame") 
+makeDraggable(SettingsFrame, "SettingsFrame")
 
 -- ==========================================
 -- BOTONES RÁPIDOS INDEPENDIENTES (FLOTANTES)
@@ -572,7 +597,7 @@ makeDraggable(SettingsFrame, "SettingsFrame")
 local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 35, 0, 35)
-    btn.Position = loadPosition("Quick_"..name, initialPos)
+    btn.Position = loadPosition("Quick_" .. name, initialPos)
     btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     btn.BackgroundTransparency = 0.2
     btn.Text = text
@@ -595,8 +620,8 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
             startPos = input.Position
             isDragging = false
             dragStartPos = input.Position
-            btn.Parent = ScreenGui 
-            btn.ZIndex = 100 
+            btn.Parent = ScreenGui
+            btn.ZIndex = 100
         end
     end)
 
@@ -620,7 +645,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
             if isDragging then
-                savePosition("Quick_"..name, btn.Position) 
+                savePosition("Quick_" .. name, btn.Position)
             end
             startPos = nil
             isDragging = false
@@ -629,8 +654,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
--- Posiciones iniciales
-createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function() 
+createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function()
     tpEnabled = not tpEnabled
     TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
@@ -638,13 +662,12 @@ end, function() return tpEnabled end)
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0.15, 0), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
 createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0.15, 0), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
-createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 180, 0.15, 0), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end) 
+createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 180, 0.15, 0), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end)
 createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0.22, 0), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
 createQuickBtn("Fly", "FLY", UDim2.new(0, 100, 0.22, 0), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 140, 0.22, 0), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 180, 0.22, 0), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
--- Botón Restaurar
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
 RestoreQuickBtn.Position = UDim2.new(0, 60, 0.29, 0)
@@ -672,7 +695,7 @@ end)
 -- ==========================================
 local function createQuickConfig(yPos, text, btnName)
     local bg, knob = createSwitch(SettingsScroll, yPos, text)
-    
+
     local isEnabled = loadButtonState(btnName)
     bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
@@ -684,10 +707,10 @@ local function createQuickConfig(yPos, text, btnName)
     bg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
-            
+
             bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
             knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-            
+
             if QuickButtons[btnName] and quickButtonsMaster then
                 QuickButtons[btnName].Visible = newState
             end
@@ -715,7 +738,6 @@ createQuickConfig(0.95, "Fly", "Fly")
 createQuickConfig(1.00, "Free Cam", "FreeCam")
 createQuickConfig(1.05, "Fullbright", "Fullbright")
 
--- Opción para el botón RST en los ajustes
 local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, 1.10, "Botón Restaurar")
 local rstEnabled = loadButtonState("Restore")
 RestoreConfigBg.BackgroundColor3 = rstEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -765,11 +787,10 @@ FullbrightSwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end
 end)
 
--- Lógica del Botón Master (Ojo)
 MasterQuickBtn.MouseButton1Click:Connect(function()
     quickButtonsMaster = not quickButtonsMaster
     MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    
+
     for name, btn in pairs(QuickButtons) do
         if quickButtonsMaster then
             btn.Visible = loadButtonState(name)
@@ -850,7 +871,7 @@ local function createSlider(parent, yPos, text, minVal, maxVal, defaultVal, call
         if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
             fill.Size = UDim2.new(posX, 0, 1, 0)
-            
+
             local val = math.floor(minVal + (maxVal - minVal) * posX)
             label.Text = text .. " (" .. val .. ")"
             callback(val)
@@ -885,11 +906,13 @@ local function createKeybindBox(yPos, text, keyName)
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 3)
 
     box.MouseButton1Click:Connect(function()
+        if listeningFor then return end
         box.Text = "..."
         box.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
         listeningFor = keyName
-        
+
         local connection
+        local cancelConnection
         connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if gameProcessed then return end
             if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -898,6 +921,20 @@ local function createKeybindBox(yPos, text, keyName)
                 box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
                 listeningFor = nil
                 connection:Disconnect()
+                if cancelConnection then cancelConnection:Disconnect() end
+            end
+        end)
+        cancelConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                task.delay(0.1, function()
+                    if listeningFor == keyName then
+                        box.Text = keybinds[keyName].Name
+                        box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                        listeningFor = nil
+                        connection:Disconnect()
+                        if cancelConnection then cancelConnection:Disconnect() end
+                    end
+                end)
             end
         end)
     end)
@@ -909,9 +946,9 @@ createKeybindBox(0.34, "Tecla Fly", "Fly")
 createKeybindBox(0.40, "Tecla Free Cam", "FreeCam")
 createKeybindBox(0.46, "Tecla Fullbright", "Fullbright")
 createKeybindBox(0.52, "Tecla X-Ray", "XRay")
-createKeybindBox(0.58, "Tecla TP (PC)", "Teleport") 
-createKeybindBox(0.64, "Tecla Borrador", "Delete") 
-createKeybindBox(0.70, "Tecla Restaurar", "Restore") 
+createKeybindBox(0.58, "Tecla TP (PC)", "Teleport")
+createKeybindBox(0.64, "Tecla Borrador", "Delete")
+createKeybindBox(0.70, "Tecla Restaurar", "Restore")
 
 -- ==========================================
 -- TECLAS DE ACCESO RÁPIDO (KEYBINDS) Y TP PC
@@ -919,7 +956,7 @@ createKeybindBox(0.70, "Tecla Restaurar", "Restore")
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if listeningFor then return end
-    
+
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if input.KeyCode == keybinds.Invisicam then toggleInvisicam(not invisicamEnabled) end
         if input.KeyCode == keybinds.Noclip then toggleNoclip(not noclipEnabled) end
@@ -927,10 +964,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.FreeCam then toggleFreeCam(not freeCamEnabled) end
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
-        if input.KeyCode == keybinds.Delete then toggleDeleteMode(not deleteModeEnabled) end 
-        if input.KeyCode == keybinds.Restore then RestoreMap() end 
-        
-        -- TP Instantáneo en PC
+        if input.KeyCode == keybinds.Delete then toggleDeleteMode(not deleteModeEnabled) end
+        if input.KeyCode == keybinds.Restore then RestoreMap() end
+
         if input.KeyCode == keybinds.Teleport and tpEnabled then
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
@@ -950,16 +986,24 @@ end)
 -- ==========================================
 -- SISTEMA DE BORRADO Y TP TÁCTIL (CORREGIDO)
 -- ==========================================
+local function isOverGui(pos)
+    local guiObjects = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
+    for _, obj in ipairs(guiObjects) do
+        if obj:IsDescendantOf(ScreenGui) then return true end
+    end
+    return false
+end
+
 local function DeletePartAt(mousePos)
     local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
     local params = RaycastParams.new()
     params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
     params.FilterType = Enum.RaycastFilterType.Exclude
-    
+
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then table.insert(params.FilterDescendantsInstances, p.Character) end
     end
-    
+
     local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
     if result and result.Instance then
         local part = result.Instance
@@ -971,10 +1015,13 @@ local function DeletePartAt(mousePos)
     end
 end
 
--- Click en PC para Borrar
+-- Click en PC para Borrar (con guard de GUI)
 Mouse.Button1Down:Connect(function()
     if deleteModeEnabled then
-        DeletePartAt(UserInputService:GetMouseLocation())
+        local mousePos = UserInputService:GetMouseLocation()
+        if not isOverGui(mousePos) then
+            DeletePartAt(mousePos)
+        end
     end
 end)
 
@@ -982,7 +1029,7 @@ end)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
-        touchStartTime = tick(); touchStartPos = input.Position; isDraggingCamera = false
+        touchStartTime = os.clock(); touchStartPos = input.Position; isDraggingCamera = false
     end
 end)
 
@@ -996,12 +1043,13 @@ end)
 UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
-        local touchDuration = tick() - touchStartTime
-        
-        if touchDuration < 0.2 and not isDraggingCamera then
-            local guiObjects = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+        local touchDuration = os.clock() - touchStartTime
+
+        if touchDuration < 0.3 and not isDraggingCamera then
             local touchedUI = false
-            for _, obj in ipairs(guiObjects) do if obj:IsDescendantOf(ScreenGui) then touchedUI = true break end end
+            for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)) do
+                if obj:IsDescendantOf(ScreenGui) then touchedUI = true break end
+            end
 
             if not touchedUI then
                 if deleteModeEnabled then
@@ -1011,7 +1059,7 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
                     local raycastParams = RaycastParams.new()
                     raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
                     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                    
+
                     local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
                     if result then
                         local char = LocalPlayer.Character
