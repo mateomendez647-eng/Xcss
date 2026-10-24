@@ -171,7 +171,7 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.Parent = Title
 Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
 
--- ScrollingFrame para los switches
+-- ScrollingFrame para los switches del menú principal
 local MainScroll = Instance.new("ScrollingFrame")
 MainScroll.Size = UDim2.new(1, 0, 1, -25)
 MainScroll.Position = UDim2.new(0, 0, 0, 25)
@@ -182,24 +182,29 @@ MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
 MainScroll.CanvasSize = UDim2.new(0, 0, 0, 300)
 MainScroll.Parent = MainFrame
 
-local function createSwitch(parent, yPos, text)
+local function createSwitch(parent, text)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 20)
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.75, 0, 0, 20)
-    label.Position = UDim2.new(0.06, 0, yPos, 0)
+    label.Size = UDim2.new(0.75, 0, 1, 0)
+    label.Position = UDim2.new(0.06, 0, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = Color3.fromRGB(200, 200, 200)
     label.Font = Enum.Font.Gotham
     label.TextSize = 10
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = parent
+    label.Parent = container
 
     local bg = Instance.new("TextButton")
     bg.Size = UDim2.new(0, 30, 0, 16)
-    bg.Position = UDim2.new(0.75, 0, yPos, 2)
+    bg.Position = UDim2.new(0.8, 0, 0.5, -8) -- Ajustado para el contenedor
     bg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     bg.Text = ""
-    bg.Parent = parent
+    bg.Parent = container
     Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("Frame")
@@ -209,17 +214,29 @@ local function createSwitch(parent, yPos, text)
     knob.Parent = bg
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
-    return bg, knob
+    return bg, knob, container
 end
 
-local TPSwitchBg, TPSwitchKnob = createSwitch(MainScroll, 0.05, "TPS")
-local SwitchBg, SwitchKnob = createSwitch(MainScroll, 0.15, "Invisicam")
-local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, 0.25, "FP X-Ray")
-local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, 0.35, "Borrador de Paredes")
-local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, 0.45, "Noclip")
-local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, 0.55, "Fly")
-local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, 0.65, "Free Cam")
-local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, 0.75, "Fullbright")
+-- Aplicar UIListLayout al menú principal
+local MainList = Instance.new("UIListLayout")
+MainList.Padding = UDim.new(0, 8)
+MainList.SortOrder = Enum.SortOrder.LayoutOrder
+MainList.Parent = MainScroll
+
+local MainPadding = Instance.new("UIPadding")
+MainPadding.PaddingTop = UDim.new(0, 10)
+MainPadding.PaddingLeft = UDim.new(0, 5)
+MainPadding.Parent = MainScroll
+
+-- Crear switches del menú principal (Ya no necesitan yPos)
+local TPSwitchBg, TPSwitchKnob = createSwitch(MainScroll, "TPS")
+local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
+local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
+local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
+local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
+local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
+local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
+local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
 -- ==========================================
 -- PANEL DE AJUSTES (TUERCA)
@@ -241,7 +258,7 @@ CloseSettingsBtn.Text = "X"
 CloseSettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseSettingsBtn.Font = Enum.Font.GothamBold
 CloseSettingsBtn.TextSize = 10
-CloseSettingsBtn.ZIndex = 5
+CloseSettingsBtn.ZIndex = 10
 CloseSettingsBtn.Parent = SettingsFrame
 Instance.new("UICorner", CloseSettingsBtn).CornerRadius = UDim.new(0, 4)
 
@@ -252,8 +269,19 @@ SettingsScroll.BackgroundTransparency = 1
 SettingsScroll.BorderSizePixel = 0
 SettingsScroll.ScrollBarThickness = 3
 SettingsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 700)
+SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+SettingsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 SettingsScroll.Parent = SettingsFrame
+
+local SettingsList = Instance.new("UIListLayout")
+SettingsList.Padding = UDim.new(0, 8)
+SettingsList.SortOrder = Enum.SortOrder.LayoutOrder
+SettingsList.Parent = SettingsScroll
+
+local SettingsPadding = Instance.new("UIPadding")
+SettingsPadding.PaddingTop = UDim.new(0, 10)
+SettingsPadding.PaddingLeft = UDim.new(0, 5)
+SettingsPadding.Parent = SettingsScroll
 
 -- ==========================================
 -- LÓGICAS DE LAS FUNCIONES
@@ -264,12 +292,17 @@ local function toggleNoclip(state)
     NoclipSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
     if QuickButtons["Noclip"] then QuickButtons["Noclip"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
 
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+
     if state then
         if noclipConnection then noclipConnection:Disconnect() end
         noclipConnection = RunService.Stepped:Connect(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            for _, part in ipairs(char:GetDescendants()) do
+            local c = LocalPlayer.Character
+            if not c then return end
+            for _, part in ipairs(c:GetDescendants()) do
                 if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
                     if part.CanCollide then part.CanCollide = false end
                 end
@@ -278,12 +311,21 @@ local function toggleNoclip(state)
     else
         if noclipConnection then noclipConnection:Disconnect() end
         noclipConnection = nil
-        local char = LocalPlayer.Character
-        if char then
+        
+        if char and hrp then
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0)
             for _, part in ipairs(char:GetDescendants()) do
                 if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
-                    part.CanCollide = true
+                    if part.Name == "HumanoidRootPart" or part.Name == "Head" or part.Name == "Torso" or part.Name:find("Torso") or part.Name:find("Leg") or part.Name:find("Foot") then
+                        part.CanCollide = true
+                    else
+                        part.CanCollide = false 
+                    end
                 end
+            end
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
             end
         end
     end
@@ -433,6 +475,8 @@ local function getMoveDirection()
     return (Camera.CFrame * CFrame.new(move.X, 0, move.Z)).Position - Camera.CFrame.Position
 end
 
+local toggleFreeCam
+
 local function toggleFly(state)
     flyEnabled = state
     FlySwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -440,7 +484,7 @@ local function toggleFly(state)
     if QuickButtons["Fly"] then QuickButtons["Fly"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
 
     if state then
-        if freeCamEnabled then toggleFreeCam(false) end
+        if freeCamEnabled and toggleFreeCam then toggleFreeCam(false) end
         local char = LocalPlayer.Character
         if not char then return end
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -489,7 +533,7 @@ local function toggleFly(state)
     end
 end
 
-local function toggleFreeCam(state)
+toggleFreeCam = function(state)
     freeCamEnabled = state
     FreeCamSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     FreeCamSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
@@ -693,8 +737,13 @@ end)
 -- ==========================================
 -- CONFIGURACIÓN DE QUÉ BOTONES APARECEN
 -- ==========================================
-local function createQuickConfig(yPos, text, btnName)
-    local bg, knob = createSwitch(SettingsScroll, yPos, text)
+local function createQuickConfig(text, btnName)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 20)
+    container.BackgroundTransparency = 1
+    container.Parent = SettingsScroll
+
+    local bg, knob = createSwitch(container, text)
 
     local isEnabled = loadButtonState(btnName)
     bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -719,9 +768,81 @@ local function createQuickConfig(yPos, text, btnName)
     end)
 end
 
+local function createSliderSwitch(btnName, switchText, sliderText, minVal, maxVal, defaultVal, callback)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 50)
+    container.BackgroundTransparency = 1
+    container.Parent = SettingsScroll
+
+    -- Switch
+    local bg, knob = createSwitch(container, switchText)
+    local isEnabled = loadButtonState(btnName)
+    bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if isEnabled and QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = true end
+
+    bg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
+            bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+            knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+            if QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = newState end
+            saveButtonState(btnName, newState)
+        end
+    end)
+
+    -- Slider
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.8, 0, 0, 10)
+    label.Position = UDim2.new(0.1, 0, 0, 22)
+    label.BackgroundTransparency = 1
+    label.Text = sliderText .. " (" .. defaultVal .. ")"
+    label.TextColor3 = Color3.fromRGB(150, 150, 150)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 8
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local barBg = Instance.new("TextButton")
+    barBg.Size = UDim2.new(0.8, 0, 0, 6)
+    barBg.Position = UDim2.new(0.1, 0, 0, 36)
+    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    barBg.Text = ""
+    barBg.Parent = container
+    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    fill.Parent = barBg
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local isSliding = false
+    barBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isSliding = true
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isSliding = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
+            fill.Size = UDim2.new(posX, 0, 1, 0)
+            local val = math.floor(minVal + (maxVal - minVal) * posX)
+            label.Text = sliderText .. " (" .. val .. ")"
+            callback(val)
+        end
+    end)
+end
+
 local ConfigLabel = Instance.new("TextLabel")
 ConfigLabel.Size = UDim2.new(1, 0, 0, 15)
-ConfigLabel.Position = UDim2.new(0, 0, 0.65, 0)
 ConfigLabel.BackgroundTransparency = 1
 ConfigLabel.Text = "--- Botones ---"
 ConfigLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
@@ -729,16 +850,21 @@ ConfigLabel.Font = Enum.Font.GothamBold
 ConfigLabel.TextSize = 9
 ConfigLabel.Parent = SettingsScroll
 
-createQuickConfig(0.70, "TPS", "TPS")
-createQuickConfig(0.75, "Invisicam", "Invisicam")
-createQuickConfig(0.80, "FP X-Ray", "FPXRay")
-createQuickConfig(0.85, "Borrador", "DeleteMode")
-createQuickConfig(0.90, "Noclip", "Noclip")
-createQuickConfig(0.95, "Fly", "Fly")
-createQuickConfig(1.00, "Free Cam", "FreeCam")
-createQuickConfig(1.05, "Fullbright", "Fullbright")
+createQuickConfig("TPS", "TPS")
+createQuickConfig("Invisicam", "Invisicam")
+createQuickConfig("FP X-Ray", "FPXRay")
+createQuickConfig("Borrador", "DeleteMode")
+createQuickConfig("Noclip", "Noclip")
 
-local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, 1.10, "Botón Restaurar")
+-- Integración del switch y slider de Fly
+createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
+
+-- Integración del switch y slider de Free Cam
+createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
+
+createQuickConfig("Fullbright", "Fullbright")
+
+local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, "Botón Restaurar")
 local rstEnabled = loadButtonState("Restore")
 RestoreConfigBg.BackgroundColor3 = rstEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
 RestoreConfigKnob.Position = rstEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
@@ -825,84 +951,34 @@ CloseSettingsBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- PANEL DE AJUSTES (Velocidades y Keybinds)
+-- PANEL DE AJUSTES (Keybinds)
 -- ==========================================
-local function createSlider(parent, yPos, text, minVal, maxVal, defaultVal, callback)
+local function createKeybindBox(text, keyName)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 20)
+    container.BackgroundTransparency = 1
+    container.Parent = SettingsScroll
+
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.8, 0, 0, 15)
-    label.Position = UDim2.new(0.1, 0, yPos, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text .. " (" .. defaultVal .. ")"
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 9
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = parent
-
-    local barBg = Instance.new("TextButton")
-    barBg.Size = UDim2.new(0.8, 0, 0, 10)
-    barBg.Position = UDim2.new(0.1, 0, yPos, 18)
-    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    barBg.Text = ""
-    barBg.Parent = parent
-    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    fill.Parent = barBg
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local isSliding = false
-
-    barBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isSliding = true
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isSliding = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
-            fill.Size = UDim2.new(posX, 0, 1, 0)
-
-            local val = math.floor(minVal + (maxVal - minVal) * posX)
-            label.Text = text .. " (" .. val .. ")"
-            callback(val)
-        end
-    end)
-end
-
-createSlider(SettingsScroll, 0.05, "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
-createSlider(SettingsScroll, 0.12, "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
-
-local function createKeybindBox(yPos, text, keyName)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.6, 0, 0, 20)
-    label.Position = UDim2.new(0.1, 0, yPos, 0)
+    label.Size = UDim2.new(0.6, 0, 1, 0)
+    label.Position = UDim2.new(0.1, 0, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = Color3.fromRGB(200, 200, 200)
     label.Font = Enum.Font.Gotham
     label.TextSize = 9
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = SettingsScroll
+    label.Parent = container
 
     local box = Instance.new("TextButton")
-    box.Size = UDim2.new(0.25, 0, 0, 20)
-    box.Position = UDim2.new(0.65, 0, yPos, 0)
+    box.Size = UDim2.new(0.25, 0, 1, 0)
+    box.Position = UDim2.new(0.65, 0, 0, 0)
     box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     box.Text = keybinds[keyName].Name
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
     box.Font = Enum.Font.GothamBold
     box.TextSize = 9
-    box.Parent = SettingsScroll
+    box.Parent = container
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 3)
 
     box.MouseButton1Click:Connect(function()
@@ -940,15 +1016,15 @@ local function createKeybindBox(yPos, text, keyName)
     end)
 end
 
-createKeybindBox(0.22, "Tecla Invisicam", "Invisicam")
-createKeybindBox(0.28, "Tecla Noclip", "Noclip")
-createKeybindBox(0.34, "Tecla Fly", "Fly")
-createKeybindBox(0.40, "Tecla Free Cam", "FreeCam")
-createKeybindBox(0.46, "Tecla Fullbright", "Fullbright")
-createKeybindBox(0.52, "Tecla X-Ray", "XRay")
-createKeybindBox(0.58, "Tecla TP (PC)", "Teleport")
-createKeybindBox(0.64, "Tecla Borrador", "Delete")
-createKeybindBox(0.70, "Tecla Restaurar", "Restore")
+createKeybindBox("Tecla Invisicam", "Invisicam")
+createKeybindBox("Tecla Noclip", "Noclip")
+createKeybindBox("Tecla Fly", "Fly")
+createKeybindBox("Tecla Free Cam", "FreeCam")
+createKeybindBox("Tecla Fullbright", "Fullbright")
+createKeybindBox("Tecla X-Ray", "XRay")
+createKeybindBox("Tecla TP (PC)", "Teleport")
+createKeybindBox("Tecla Borrador", "Delete")
+createKeybindBox("Tecla Restaurar", "Restore")
 
 -- ==========================================
 -- TECLAS DE ACCESO RÁPIDO (KEYBINDS) Y TP PC
@@ -984,7 +1060,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ==========================================
--- SISTEMA DE BORRADO Y TP TÁCTIL (CORREGIDO)
+-- SISTEMA DE BORRADO Y TP TÁCTIL
 -- ==========================================
 local function isOverGui(pos)
     local guiObjects = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
