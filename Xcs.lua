@@ -201,7 +201,7 @@ local function createSwitch(parent, text)
 
     local bg = Instance.new("TextButton")
     bg.Size = UDim2.new(0, 30, 0, 16)
-    bg.Position = UDim2.new(0.8, 0, 0.5, -8) -- Ajustado para el contenedor
+    bg.Position = UDim2.new(0.8, 0, 0.5, -8)
     bg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     bg.Text = ""
     bg.Parent = container
@@ -217,7 +217,6 @@ local function createSwitch(parent, text)
     return bg, knob, container
 end
 
--- Aplicar UIListLayout al menú principal
 local MainList = Instance.new("UIListLayout")
 MainList.Padding = UDim.new(0, 8)
 MainList.SortOrder = Enum.SortOrder.LayoutOrder
@@ -228,7 +227,6 @@ MainPadding.PaddingTop = UDim.new(0, 10)
 MainPadding.PaddingLeft = UDim.new(0, 5)
 MainPadding.Parent = MainScroll
 
--- Crear switches del menú principal (Ya no necesitan yPos)
 local TPSwitchBg, TPSwitchKnob = createSwitch(MainScroll, "TPS")
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
@@ -688,7 +686,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 toggleFunc()
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
-            if isDragging then
+                        if isDragging then
                 savePosition("Quick_" .. name, btn.Position)
             end
             startPos = nil
@@ -774,7 +772,6 @@ local function createSliderSwitch(btnName, switchText, sliderText, minVal, maxVa
     container.BackgroundTransparency = 1
     container.Parent = SettingsScroll
 
-    -- Switch
     local bg, knob = createSwitch(container, switchText)
     local isEnabled = loadButtonState(btnName)
     bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -791,7 +788,6 @@ local function createSliderSwitch(btnName, switchText, sliderText, minVal, maxVa
         end
     end)
 
-    -- Slider
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(0.8, 0, 0, 10)
     label.Position = UDim2.new(0.1, 0, 0, 22)
@@ -856,10 +852,7 @@ createQuickConfig("FP X-Ray", "FPXRay")
 createQuickConfig("Borrador", "DeleteMode")
 createQuickConfig("Noclip", "Noclip")
 
--- Integración del switch y slider de Fly
 createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
-
--- Integración del switch y slider de Free Cam
 createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 
 createQuickConfig("Fullbright", "Fullbright")
@@ -1027,6 +1020,51 @@ createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
 -- ==========================================
+-- RAYCAST QUE IGNORA PAREDES YA BORRADAS
+-- ==========================================
+local function raycastIgnoringDeleted(origin, direction, extraFilter)
+    local filter = {LocalPlayer.Character, Camera}
+    if extraFilter then
+        for _, v in ipairs(extraFilter) do table.insert(filter, v) end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(filter, p.Character) end
+    end
+    for _, data in ipairs(deletedPartsMemory) do
+        if data.part and data.part.Parent then table.insert(filter, data.part) end
+    end
+
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = filter
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    return Workspace:Raycast(origin, direction, params)
+end
+
+local function DeletePartAt(mousePos)
+    local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
+    local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
+    if result and result.Instance then
+        local part = result.Instance
+        if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
+            table.insert(deletedPartsMemory, {part = part, trans = part.Transparency, collide = part.CanCollide})
+            part.Transparency = 1
+            part.CanCollide = false
+        end
+    end
+end
+
+local function TeleportAt(mousePos)
+    local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
+    local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
+    if result then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+        end
+    end
+end
+
+-- ==========================================
 -- TECLAS DE ACCESO RÁPIDO (KEYBINDS) Y TP PC
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1044,23 +1082,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.Restore then RestoreMap() end
 
         if input.KeyCode == keybinds.Teleport and tpEnabled then
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                local ray = Camera:ScreenPointToRay(Mouse.X, Mouse.Y)
-                local params = RaycastParams.new()
-                params.FilterDescendantsInstances = {char}
-                params.FilterType = Enum.RaycastFilterType.Exclude
-                local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-                if result then
-                    char.HumanoidRootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
-                end
-            end
+            TeleportAt(UserInputService:GetMouseLocation())
         end
     end
 end)
 
 -- ==========================================
--- SISTEMA DE BORRADO Y TP TÁCTIL
+-- SISTEMA DE BORRADO Y TP TÁCTIL (CORREGIDO)
 -- ==========================================
 local function isOverGui(pos)
     local guiObjects = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
@@ -1070,28 +1098,7 @@ local function isOverGui(pos)
     return false
 end
 
-local function DeletePartAt(mousePos)
-    local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-    params.FilterType = Enum.RaycastFilterType.Exclude
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(params.FilterDescendantsInstances, p.Character) end
-    end
-
-    local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-    if result and result.Instance then
-        local part = result.Instance
-        if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
-            table.insert(deletedPartsMemory, {part = part, trans = part.Transparency, collide = part.CanCollide})
-            part.Transparency = 1
-            part.CanCollide = false
-        end
-    end
-end
-
--- Click en PC para Borrar (con guard de GUI)
+-- Click en PC para Borrar
 Mouse.Button1Down:Connect(function()
     if deleteModeEnabled then
         local mousePos = UserInputService:GetMouseLocation()
@@ -1101,11 +1108,13 @@ Mouse.Button1Down:Connect(function()
     end
 end)
 
--- Toques en Móvil
+-- Registro de toque inicial
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
-        touchStartTime = os.clock(); touchStartPos = input.Position; isDraggingCamera = false
+        touchStartTime = os.clock()
+        touchStartPos = input.Position
+        isDraggingCamera = false
     end
 end)
 
@@ -1120,29 +1129,26 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
         local touchDuration = os.clock() - touchStartTime
+        local moved = (input.Position - touchStartPos).Magnitude
 
-        if touchDuration < 0.3 and not isDraggingCamera then
+        -- TAP válido: corto, sin arrastre y desplazamiento mínimo
+        local isTap = touchDuration < 0.35 and moved < 12 and not isDraggingCamera
+        -- HOLD válido para borrar: mantener pulsado >= 0.5s sin arrastrar
+        local isHold = touchDuration >= 0.5 and moved < 20 and not isDraggingCamera
+
+        if isTap or isHold then
             local touchedUI = false
             for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)) do
                 if obj:IsDescendantOf(ScreenGui) then touchedUI = true break end
             end
 
             if not touchedUI then
-                if deleteModeEnabled then
+                if deleteModeEnabled and isHold then
+                    -- Borrar solo con hold (evita toques accidentales)
                     DeletePartAt(input.Position)
-                elseif tpEnabled then
-                    local ray = Camera:ScreenPointToRay(input.Position.X, input.Position.Y)
-                    local raycastParams = RaycastParams.new()
-                    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
-                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-                    local result = Workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
-                    if result then
-                        local char = LocalPlayer.Character
-                        if char and char:FindFirstChild("HumanoidRootPart") then
-                            char.HumanoidRootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
-                        end
-                    end
+                elseif tpEnabled and isTap then
+                    -- TP solo con tap corto (atraviesa paredes ya borradas)
+                    TeleportAt(input.Position)
                 end
             end
         end
