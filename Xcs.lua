@@ -25,10 +25,6 @@ local quickButtonsMaster = true
 local flySpeed = 50
 local freeCamSpeed = 50
 
-local touchStartTime = 0
-local touchStartPos = Vector2.new(0, 0)
-local isDraggingCamera = false
-
 local noclipConnection = nil
 local flyConnection = nil
 local flyBodyVelocity = nil
@@ -48,7 +44,6 @@ local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = En
 local listeningFor = nil
 local QuickButtons = {}
 
--- Cache del PlayerModule para leer el stick móvil sin WalkSpeed
 local playerControls = nil
 task.spawn(function()
     local ok, playerModule = pcall(function()
@@ -105,7 +100,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Botón flotante mini
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 45, 0, 45)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0.4, 0))
@@ -119,7 +113,6 @@ MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
--- Panel Principal
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 180, 0, 300)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -90, 0.5, -150))
@@ -129,7 +122,6 @@ MainFrame.Visible = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- Título del panel principal
 local Title = Instance.new("TextButton")
 Title.Size = UDim2.new(1, 0, 0, 25)
 Title.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -171,7 +163,6 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.Parent = Title
 Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
 
--- ScrollingFrame para los switches del menú principal
 local MainScroll = Instance.new("ScrollingFrame")
 MainScroll.Size = UDim2.new(1, 0, 1, -25)
 MainScroll.Position = UDim2.new(0, 0, 0, 25)
@@ -686,7 +677,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 toggleFunc()
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
-                        if isDragging then
+            if isDragging then
                 savePosition("Quick_" .. name, btn.Position)
             end
             startPos = nil
@@ -1088,8 +1079,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ==========================================
--- SISTEMA DE BORRADO Y TP TÁCTIL (CORREGIDO)
+-- SISTEMA DE BORRADO Y TP TÁCTIL (CORREGIDO - Sin borrados accidentales)
 -- ==========================================
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
 local function isOverGui(pos)
     local guiObjects = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
     for _, obj in ipairs(guiObjects) do
@@ -1098,60 +1091,106 @@ local function isOverGui(pos)
     return false
 end
 
--- Click en PC para Borrar
-Mouse.Button1Down:Connect(function()
-    if deleteModeEnabled then
-        local mousePos = UserInputService:GetMouseLocation()
-        if not isOverGui(mousePos) then
-            DeletePartAt(mousePos)
+-- Click en PC para Borrar (solo en PC)
+if not isTouchDevice then
+    Mouse.Button1Down:Connect(function()
+        if deleteModeEnabled then
+            local mousePos = UserInputService:GetMouseLocation()
+            if not isOverGui(mousePos) then
+                DeletePartAt(mousePos)
+            end
         end
-    end
-end)
+    end)
+end
 
--- Registro de toque inicial
+-- ==========================================
+-- DETECCIÓN TÁCTIL ROBUSTA (evita borrados accidentales al mover cámara)
+-- ==========================================
+local touchState = {
+    active = false,
+    startTime = 0,
+    startPos = Vector2.new(0, 0),
+    lastPos = Vector2.new(0, 0),
+    totalMoved = 0,
+    maxFrameDelta = 0,
+    isCameraDrag = false,
+}
+
+local TAP_MAX_TIME          = 0.30
+local TAP_MAX_MOVE          = 10
+local HOLD_MIN_TIME         = 0.70
+local HOLD_MAX_MOVE         = 6
+local HOLD_MAX_FRAMEDELTA   = 3
+local CAMERA_DRAG_THRESHOLD = 8
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
-        touchStartTime = os.clock()
-        touchStartPos = input.Position
-        isDraggingCamera = false
+        touchState.active = true
+        touchState.startTime = os.clock()
+        touchState.startPos = input.Position
+        touchState.lastPos = input.Position
+        touchState.totalMoved = 0
+        touchState.maxFrameDelta = 0
+        touchState.isCameraDrag = false
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.Touch then
-        if (input.Position - touchStartPos).Magnitude > 15 then isDraggingCamera = true end
+    if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
+        local delta = (input.Position - touchState.lastPos).Magnitude
+        touchState.totalMoved = touchState.totalMoved + delta
+        if delta > touchState.maxFrameDelta then
+            touchState.maxFrameDelta = delta
+        end
+
+        if delta > CAMERA_DRAG_THRESHOLD then
+            touchState.isCameraDrag = true
+        end
+        if touchState.totalMoved > TAP_MAX_MOVE then
+            touchState.isCameraDrag = true
+        end
+
+        touchState.lastPos = input.Position
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.Touch then
-        local touchDuration = os.clock() - touchStartTime
-        local moved = (input.Position - touchStartPos).Magnitude
+    if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
+        touchState.active = false
 
-        -- TAP válido: corto, sin arrastre y desplazamiento mínimo
-        local isTap = touchDuration < 0.35 and moved < 12 and not isDraggingCamera
-        -- HOLD válido para borrar: mantener pulsado >= 0.5s sin arrastrar
-        local isHold = touchDuration >= 0.5 and moved < 20 and not isDraggingCamera
+        local duration = os.clock() - touchState.startTime
+        local totalMoved = touchState.totalMoved
+        local maxFrameDelta = touchState.maxFrameDelta
+        local isCameraDrag = touchState.isCameraDrag
 
-        if isTap or isHold then
-            local touchedUI = false
-            for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)) do
-                if obj:IsDescendantOf(ScreenGui) then touchedUI = true break end
-            end
+        local isTap = duration < TAP_MAX_TIME
+                      and not isCameraDrag
+                      and totalMoved < TAP_MAX_MOVE
 
-            if not touchedUI then
-                if deleteModeEnabled and isHold then
-                    -- Borrar solo con hold (evita toques accidentales)
-                    DeletePartAt(input.Position)
-                elseif tpEnabled and isTap then
-                    -- TP solo con tap corto (atraviesa paredes ya borradas)
-                    TeleportAt(input.Position)
-                end
-            end
+        local isHold = duration >= HOLD_MIN_TIME
+                       and not isCameraDrag
+                       and totalMoved < HOLD_MAX_MOVE
+                       and maxFrameDelta < HOLD_MAX_FRAMEDELTA
+
+        if not (isTap or isHold) then
+            touchState.isCameraDrag = false
+            return
         end
-        isDraggingCamera = false
+
+        if isOverGui(input.Position) then
+            touchState.isCameraDrag = false
+            return
+        end
+
+        if deleteModeEnabled and isHold then
+            DeletePartAt(input.Position)
+        elseif tpEnabled and isTap then
+            TeleportAt(input.Position)
+        end
+
+        touchState.isCameraDrag = false
     end
 end)
