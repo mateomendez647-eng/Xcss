@@ -25,6 +25,9 @@ local quickButtonsMaster = true
 local flySpeed = 50
 local freeCamSpeed = 50
 
+-- Detectar si es dispositivo táctil (Android/iOS)
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
 local noclipConnection = nil
 local flyConnection = nil
 local flyBodyVelocity = nil
@@ -218,7 +221,12 @@ MainPadding.PaddingTop = UDim.new(0, 10)
 MainPadding.PaddingLeft = UDim.new(0, 5)
 MainPadding.Parent = MainScroll
 
-local TPSwitchBg, TPSwitchKnob = createSwitch(MainScroll, "TPS")
+-- Switch de TP: solo se crea/usará en Android
+local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
+if not isTouchDevice then
+    TPSwitchContainer.Visible = false
+end
+
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
@@ -678,7 +686,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
             if isDragging then
-                savePosition("Quick_" .. name, btn.Position)
+                                savePosition("Quick_" .. name, btn.Position)
             end
             startPos = nil
             isDragging = false
@@ -687,11 +695,14 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
-createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function()
-    tpEnabled = not tpEnabled
-    TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-end, function() return tpEnabled end)
+-- Botón rápido TPS: solo en Android (en PC el TP es automático con la tecla)
+if isTouchDevice then
+    createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function()
+        tpEnabled = not tpEnabled
+        TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+        TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    end, function() return tpEnabled end)
+end
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0.15, 0), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
 createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0.15, 0), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
@@ -837,7 +848,10 @@ ConfigLabel.Font = Enum.Font.GothamBold
 ConfigLabel.TextSize = 9
 ConfigLabel.Parent = SettingsScroll
 
-createQuickConfig("TPS", "TPS")
+-- Config de botones rápidos: TPS solo aparece si es táctil
+if isTouchDevice then
+    createQuickConfig("TPS", "TPS")
+end
 createQuickConfig("Invisicam", "Invisicam")
 createQuickConfig("FP X-Ray", "FPXRay")
 createQuickConfig("Borrador", "DeleteMode")
@@ -867,14 +881,18 @@ end)
 -- ==========================================
 -- BOTONES DEL MENÚ Y MINIMIZAR
 -- ==========================================
-TPSwitchBg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        tpEnabled = not tpEnabled
-        TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-        TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-        if QuickButtons["TPS"] then QuickButtons["TPS"].BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
-    end
-end)
+-- El switch de TP solo se conecta si es táctil (en PC está oculto)
+if isTouchDevice then
+    TPSwitchBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            tpEnabled = not tpEnabled
+            TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+            TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+            if QuickButtons["TPS"] then QuickButtons["TPS"].BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
+        end
+    end)
+end
+
 SwitchBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end
 end)
@@ -1000,13 +1018,16 @@ local function createKeybindBox(text, keyName)
     end)
 end
 
+-- Mostrar el keybind de TP solo en PC
+if not isTouchDevice then
+    createKeybindBox("Tecla TP (PC)", "Teleport")
+end
 createKeybindBox("Tecla Invisicam", "Invisicam")
 createKeybindBox("Tecla Noclip", "Noclip")
 createKeybindBox("Tecla Fly", "Fly")
 createKeybindBox("Tecla Free Cam", "FreeCam")
 createKeybindBox("Tecla Fullbright", "Fullbright")
 createKeybindBox("Tecla X-Ray", "XRay")
-createKeybindBox("Tecla TP (PC)", "Teleport")
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
@@ -1072,17 +1093,16 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.Delete then toggleDeleteMode(not deleteModeEnabled) end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
 
-        if input.KeyCode == keybinds.Teleport and tpEnabled then
+        -- EN PC: TP automático con la tecla asignada (sin necesidad de activar el switch)
+        if input.KeyCode == keybinds.Teleport then
             TeleportAt(UserInputService:GetMouseLocation())
         end
     end
 end)
 
 -- ==========================================
--- SISTEMA DE BORRADO Y TP TÁCTIL (CORREGIDO - Sin borrados accidentales)
+-- SISTEMA DE BORRADO Y TP TÁCTIL
 -- ==========================================
-local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-
 local function isOverGui(pos)
     local guiObjects = LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)
     for _, obj in ipairs(guiObjects) do
