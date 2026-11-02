@@ -572,6 +572,10 @@ toggleFreeCam = function(state)
         end
 
         Camera.CameraType = Enum.CameraType.Scriptable
+        -- ✅ FIX: liberar mouse en PC y mostrar cursor
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
+
         local look = Camera.CFrame.LookVector
         camYaw = math.atan2(-look.X, -look.Z)
         camPitch = math.asin(look.Y)
@@ -609,8 +613,13 @@ toggleFreeCam = function(state)
 
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
         freeCamRotateConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-            if not freeCamEnabled or gameProcessed then return end
+            if not freeCamEnabled then return end
+
+            -- ✅ FIX: rotar con touch (Android) Y con mouse+click derecho (PC)
             if input.UserInputType == Enum.UserInputType.Touch then
+                camYaw = camYaw - input.Delta.X * 0.005
+                camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
+            elseif input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
                 camYaw = camYaw - input.Delta.X * 0.005
                 camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
             end
@@ -621,6 +630,9 @@ toggleFreeCam = function(state)
         freeCamConnection = nil
         freeCamRotateConnection = nil
         Camera.CameraType = Enum.CameraType.Custom
+        -- ✅ FIX: restaurar mouse en PC
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = 16
@@ -692,7 +704,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
         end
     end)
 
-        btn.InputChanged:Connect(function(input)
+    btn.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
             if dragStartPos then
                 if (input.Position - dragStartPos).Magnitude > 10 then
@@ -721,13 +733,14 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
--- Botón rápido TPS: solo en Android (en PC el TP es automático con la tecla)
+-- ✅ FIX: Botón rápido TPS forzado a estar visible en Android
 if isTouchDevice then
     createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function()
         tpEnabled = not tpEnabled
         TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
         TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
     end, function() return tpEnabled end)
+    QuickButtons["TPS"].Visible = true
 end
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0.15, 0), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
@@ -877,6 +890,10 @@ ConfigLabel.Parent = SettingsScroll
 -- Config de botones rápidos: TPS solo aparece si es táctil
 if isTouchDevice then
     createQuickConfig("TPS", "TPS")
+    -- ✅ FIX: forzar visible al iniciar en Android (por si el guardado quedó en false)
+    task.defer(function()
+        if QuickButtons["TPS"] then QuickButtons["TPS"].Visible = true end
+    end)
 end
 createQuickConfig("Invisicam", "Invisicam")
 createQuickConfig("FP X-Ray", "FPXRay")
@@ -946,7 +963,11 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
 
     for name, btn in pairs(QuickButtons) do
         if quickButtonsMaster then
-            btn.Visible = loadButtonState(name)
+            if name == "TPS" and isTouchDevice then
+                btn.Visible = true
+            else
+                btn.Visible = loadButtonState(name)
+            end
         else
             btn.Visible = false
         end
@@ -1020,7 +1041,7 @@ local function createKeybindBox(text, keyName)
             if gameProcessed then return end
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 keybinds[keyName] = input.KeyCode
-                saveKeybind(keyName, input.KeyCode)  -- ✅ Guardar la tecla
+                saveKeybind(keyName, input.KeyCode)
                 box.Text = input.KeyCode.Name
                 box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
                 listeningFor = nil
@@ -1123,8 +1144,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             TeleportAt(Vector2.new(Mouse.X, Mouse.Y))
         end
 
-        -- ✅ NUEVO: En PC, la tecla de borrar elimina la pared apuntada por el cursor
-        -- sin necesidad de hacer click con el mouse.
+        -- ✅ En PC, la tecla de borrar elimina la pared apuntada por el cursor
         if input.KeyCode == keybinds.Delete then
             DeletePartAt(Vector2.new(Mouse.X, Mouse.Y))
         end
@@ -1141,9 +1161,6 @@ local function isOverGui(pos)
     end
     return false
 end
-
--- En PC ya NO se usa el click del mouse para borrar (ahora es la tecla).
--- En Android sigue funcionando con mantener pulsado (ver bloque táctil abajo).
 
 -- ==========================================
 -- DETECCIÓN TÁCTIL ROBUSTA (evita borrados accidentales al mover cámara)
