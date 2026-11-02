@@ -43,20 +43,8 @@ local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
 local savedLighting = {}
-local keybinds = { Invisicam = Enum.KeyCode.V, Noclip = Enum.KeyCode.X, Fly = Enum.KeyCode.Z, FreeCam = Enum.KeyCode.C, Fullbright = Enum.KeyCode.B, Teleport = Enum.KeyCode.G, XRay = Enum.KeyCode.K, Delete = Enum.KeyCode.L, Restore = Enum.KeyCode.R }
 local listeningFor = nil
 local QuickButtons = {}
-
-local playerControls = nil
-task.spawn(function()
-    local ok, playerModule = pcall(function()
-        return require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule", 10))
-    end)
-    if ok and playerModule then
-        local ok2, controls = pcall(function() return playerModule:GetControls() end)
-        if ok2 then playerControls = controls end
-    end
-end)
 
 -- ==========================================
 -- SISTEMA DE GUARDADO
@@ -93,6 +81,44 @@ end
 
 local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, state) end
 local function loadButtonState(btnName) return loadData("BtnState_" .. btnName, "true") == "true" end
+
+-- Guardado/carga de keybinds
+local function saveKeybind(keyName, keyCode)
+    saveData("Key_" .. keyName, keyCode.Name)
+end
+
+local function loadKeybind(keyName, defaultCode)
+    local saved = loadData("Key_" .. keyName, nil)
+    if saved then
+        local ok, code = pcall(function() return Enum.KeyCode[saved] end)
+        if ok and code then return code end
+    end
+    return defaultCode
+end
+
+-- Tabla de keybinds: carga las teclas guardadas al iniciar
+local keybinds = {
+    Invisicam  = loadKeybind("Invisicam",  Enum.KeyCode.V),
+    Noclip     = loadKeybind("Noclip",     Enum.KeyCode.X),
+    Fly        = loadKeybind("Fly",        Enum.KeyCode.Z),
+    FreeCam    = loadKeybind("FreeCam",    Enum.KeyCode.C),
+    Fullbright = loadKeybind("Fullbright", Enum.KeyCode.B),
+    Teleport   = loadKeybind("Teleport",   Enum.KeyCode.G),
+    XRay       = loadKeybind("XRay",       Enum.KeyCode.K),
+    Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
+    Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
+}
+
+local playerControls = nil
+task.spawn(function()
+    local ok, playerModule = pcall(function()
+        return require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule", 10))
+    end)
+    if ok and playerModule then
+        local ok2, controls = pcall(function() return playerModule:GetControls() end)
+        if ok2 then playerControls = controls end
+    end
+end)
 
 -- ==========================================
 -- INTERFAZ PRINCIPAL COMPACTA CON SCROLL
@@ -666,7 +692,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
         end
     end)
 
-    btn.InputChanged:Connect(function(input)
+        btn.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
             if dragStartPos then
                 if (input.Position - dragStartPos).Magnitude > 10 then
@@ -686,7 +712,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
             if isDragging then
-                                savePosition("Quick_" .. name, btn.Position)
+                savePosition("Quick_" .. name, btn.Position)
             end
             startPos = nil
             isDragging = false
@@ -881,7 +907,6 @@ end)
 -- ==========================================
 -- BOTONES DEL MENÚ Y MINIMIZAR
 -- ==========================================
--- El switch de TP solo se conecta si es táctil (en PC está oculto)
 if isTouchDevice then
     TPSwitchBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -953,7 +978,7 @@ CloseSettingsBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- PANEL DE AJUSTES (Keybinds)
+-- PANEL DE AJUSTES (Keybinds) - CON GUARDADO
 -- ==========================================
 local function createKeybindBox(text, keyName)
     local container = Instance.new("Frame")
@@ -995,6 +1020,7 @@ local function createKeybindBox(text, keyName)
             if gameProcessed then return end
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 keybinds[keyName] = input.KeyCode
+                saveKeybind(keyName, input.KeyCode)  -- ✅ Guardar la tecla
                 box.Text = input.KeyCode.Name
                 box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
                 listeningFor = nil
@@ -1090,12 +1116,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.FreeCam then toggleFreeCam(not freeCamEnabled) end
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
-        if input.KeyCode == keybinds.Delete then toggleDeleteMode(not deleteModeEnabled) end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
 
-        -- EN PC: TP automático con la tecla asignada (sin necesidad de activar el switch)
+        -- ✅ TP con el cursor (coordenadas del viewport de la cámara)
         if input.KeyCode == keybinds.Teleport then
-            TeleportAt(UserInputService:GetMouseLocation())
+            TeleportAt(Vector2.new(Mouse.X, Mouse.Y))
+        end
+
+        -- ✅ NUEVO: En PC, la tecla de borrar elimina la pared apuntada por el cursor
+        -- sin necesidad de hacer click con el mouse.
+        if input.KeyCode == keybinds.Delete then
+            DeletePartAt(Vector2.new(Mouse.X, Mouse.Y))
         end
     end
 end)
@@ -1111,17 +1142,8 @@ local function isOverGui(pos)
     return false
 end
 
--- Click en PC para Borrar (solo en PC)
-if not isTouchDevice then
-    Mouse.Button1Down:Connect(function()
-        if deleteModeEnabled then
-            local mousePos = UserInputService:GetMouseLocation()
-            if not isOverGui(mousePos) then
-                DeletePartAt(mousePos)
-            end
-        end
-    end)
-end
+-- En PC ya NO se usa el click del mouse para borrar (ahora es la tecla).
+-- En Android sigue funcionando con mantener pulsado (ver bloque táctil abajo).
 
 -- ==========================================
 -- DETECCIÓN TÁCTIL ROBUSTA (evita borrados accidentales al mover cámara)
