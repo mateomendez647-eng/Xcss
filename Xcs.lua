@@ -507,6 +507,12 @@ local function toggleFly(state)
     if QuickButtons["Fly"] then QuickButtons["Fly"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
 
     if state then
+        -- ✅ Limpieza previa de instancias/conexiones para evitar duplicados
+        if flyConnection then flyConnection:Disconnect() end
+        if flyBodyVelocity then flyBodyVelocity:Destroy() end
+        if flyBodyGyro then flyBodyGyro:Destroy() end
+        flyConnection, flyBodyVelocity, flyBodyGyro = nil, nil, nil
+
         if freeCamEnabled and toggleFreeCam then toggleFreeCam(false) end
         local char = LocalPlayer.Character
         if not char then return end
@@ -553,9 +559,13 @@ local function toggleFly(state)
         if flyConnection then flyConnection:Disconnect() end
         if flyBodyVelocity then flyBodyVelocity:Destroy() end
         if flyBodyGyro then flyBodyGyro:Destroy() end
+        flyConnection, flyBodyVelocity, flyBodyGyro = nil, nil, nil
     end
 end
 
+-- ==========================================
+-- ✅ FREECAM (PC + ANDROID corregido)
+-- ==========================================
 toggleFreeCam = function(state)
     freeCamEnabled = state
     FreeCamSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -569,12 +579,19 @@ toggleFreeCam = function(state)
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = 0
             char.Humanoid.JumpPower = 0
+            -- ✅ Congela al personaje (evita que el joystick/WASD lo mueva)
+            char.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
         end
 
         Camera.CameraType = Enum.CameraType.Scriptable
-        -- ✅ FIX: liberar mouse en PC y mostrar cursor
+        -- ✅ Liberar mouse en PC y mostrar cursor
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
+
+        -- ✅ Desactivar PlayerModule (PC y Android) para que WASD/joystick no interfieran
+        if playerControls then
+            pcall(function() playerControls:Disable() end)
+        end
 
         local look = Camera.CFrame.LookVector
         camYaw = math.atan2(-look.X, -look.Z)
@@ -593,17 +610,9 @@ toggleFreeCam = function(state)
                 if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector = moveVector + rot.RightVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
                 if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
-            else
-                local stick = Vector3.zero
-                if playerControls then
-                    local ok, mv = pcall(function() return playerControls:GetMoveVector() end)
-                    if ok and mv then stick = mv end
-                end
-
-                if stick.Magnitude > 0.1 then
-                    moveVector = (rot.LookVector * -stick.Z) + (rot.RightVector * stick.X)
-                end
             end
+            -- ✅ En Android NO usamos joystick para mover la cámara.
+            --    Se mueve arrastrando el dedo fuera de la zona del joystick.
 
             if moveVector.Magnitude > 0 then
                 camPos = camPos + (moveVector.Unit * freeCamSpeed * dt)
@@ -614,9 +623,17 @@ toggleFreeCam = function(state)
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
         freeCamRotateConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
             if not freeCamEnabled then return end
+            if gameProcessed then return end
 
-            -- ✅ FIX: rotar con touch (Android) Y con mouse+click derecho (PC)
+            -- ✅ En Android: ignorar toques en la zona del joystick (esquina inferior izquierda)
+            local function isInJoystickZone(pos)
+                if not isTouchDevice then return false end
+                local vp = Camera.ViewportSize
+                return pos.X < vp.X * 0.4 and pos.Y > vp.Y * 0.5
+            end
+
             if input.UserInputType == Enum.UserInputType.Touch then
+                if isInJoystickZone(input.Position) then return end
                 camYaw = camYaw - input.Delta.X * 0.005
                 camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
             elseif input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
@@ -630,16 +647,30 @@ toggleFreeCam = function(state)
         freeCamConnection = nil
         freeCamRotateConnection = nil
         Camera.CameraType = Enum.CameraType.Custom
-        -- ✅ FIX: restaurar mouse en PC
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
+
+        -- ✅ Reactivar PlayerModule (PC y Android)
+        if playerControls then
+            pcall(function() playerControls:Enable() end)
+        end
+
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = 16
             char.Humanoid.JumpPower = 50
+            char.Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
     end
 end
+
+-- ==========================================
+-- ✅ GUARD DE RESPAWN: evita quedar congelado si mueres con FreeCam/Fly activo
+-- ==========================================
+LocalPlayer.CharacterAdded:Connect(function()
+    if freeCamEnabled then toggleFreeCam(false) end
+    if flyEnabled then toggleFly(false) end
+end)
 
 -- ==========================================
 -- SISTEMA DE ARRASTRE CON GUARDADO
@@ -733,7 +764,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
--- ✅ FIX: Botón rápido TPS forzado a estar visible en Android
+-- ✅ Botón rápido TPS forzado a estar visible en Android
 if isTouchDevice then
     createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function()
         tpEnabled = not tpEnabled
@@ -890,7 +921,7 @@ ConfigLabel.Parent = SettingsScroll
 -- Config de botones rápidos: TPS solo aparece si es táctil
 if isTouchDevice then
     createQuickConfig("TPS", "TPS")
-    -- ✅ FIX: forzar visible al iniciar en Android (por si el guardado quedó en false)
+    -- ✅ Forzar visible al iniciar en Android (por si el guardado quedó en false)
     task.defer(function()
         if QuickButtons["TPS"] then QuickButtons["TPS"].Visible = true end
     end)
