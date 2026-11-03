@@ -42,10 +42,10 @@ local freeCamRotateConnection = nil
 local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
--- ✅ Estado del joystick capturado directamente en Android
+-- Estado de conexiones touch de FreeCam (para limpiar al salir)
+local freeCamTouchConns = {}
 local freeCamJoystickInput = Vector2.zero
 local freeCamJoystickTouch = nil
-local freeCamTouchConns = {}
 
 local savedLighting = {}
 local listeningFor = nil
@@ -87,7 +87,6 @@ end
 local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, state) end
 local function loadButtonState(btnName) return loadData("BtnState_" .. btnName, "true") == "true" end
 
--- Guardado/carga de keybinds
 local function saveKeybind(keyName, keyCode)
     saveData("Key_" .. keyName, keyCode.Name)
 end
@@ -101,7 +100,6 @@ local function loadKeybind(keyName, defaultCode)
     return defaultCode
 end
 
--- Tabla de keybinds: carga las teclas guardadas al iniciar
 local keybinds = {
     Invisicam  = loadKeybind("Invisicam",  Enum.KeyCode.V),
     Noclip     = loadKeybind("Noclip",     Enum.KeyCode.X),
@@ -568,10 +566,10 @@ local function toggleFly(state)
 end
 
 -- ==========================================
--- ✅ FREECAM v3 (PC + ANDROID corregido)
---    PC: mouse libre + click derecho para rotar + WASD para moverse
---    Android: joystick leído DIRECTO del touch (PlayerModule no reporta en Scriptable)
---             + arrastrar fuera del joystick para rotar
+-- ✅ FREECAM v4 (PC + ANDROID)
+--    PC: mouse libre + click derecho para rotar + WASD para moverse (idéntico a antes)
+--    Android: Humanoid.MoveDirection para traslación (sí funciona en Scriptable)
+--             + arrastrar fuera de la zona inferior-izquierda para rotar
 -- ==========================================
 toggleFreeCam = function(state)
     freeCamEnabled = state
@@ -589,6 +587,7 @@ toggleFreeCam = function(state)
         end
 
         Camera.CameraType = Enum.CameraType.Scriptable
+        -- PC: liberar mouse y mostrar cursor
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
 
@@ -597,70 +596,17 @@ toggleFreeCam = function(state)
         camPitch = math.asin(look.Y)
         camPos = Camera.CFrame.Position
 
-        freeCamJoystickInput = Vector2.zero
-        freeCamJoystickTouch = nil
-
-        -- ==========================================
-        -- LECTURA DIRECTA DEL JOYSTICK (Android)
-        -- ==========================================
-        local function getJoystickCenterAndRadius()
-            local vp = Camera.ViewportSize
-            local center = Vector2.new(vp.X * 0.15, vp.Y * 0.75)
-            local radius = math.max(vp.X * 0.10, 60)
-            return center, radius
-        end
-
-        local function isTouchInJoystickZone(pos)
-            if not isTouchDevice then return false end
-            local center, radius = getJoystickCenterAndRadius()
-            return (pos - center).Magnitude <= radius * 1.3
-        end
-
-        -- Capturar el toque inicial dentro de la zona del joystick
-        local touchBeganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-            if not freeCamEnabled then return end
-            if gameProcessed then return end
-            if input.UserInputType ~= Enum.UserInputType.Touch then return end
-            if isTouchInJoystickZone(input.Position) then
-                freeCamJoystickTouch = input
-                freeCamJoystickInput = Vector2.zero
-            end
-        end)
-
-        -- Actualizar el vector del joystick mientras se arrastra
-        local touchChangedConn = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-            if not freeCamEnabled then return end
-            if gameProcessed then return end
-            if input.UserInputType ~= Enum.UserInputType.Touch then return end
-            if freeCamJoystickTouch and input == freeCamJoystickTouch then
-                local center, radius = getJoystickCenterAndRadius()
-                local delta = input.Position - center
-                local mag = delta.Magnitude
-                local normalized = mag > radius and (delta.Unit * radius) or delta
-                freeCamJoystickInput = Vector2.new(
-                    normalized.X / radius,
-                    -normalized.Y / radius
-                )
-            end
-        end)
-
-        local touchEndedConn = UserInputService.InputEnded:Connect(function(input, gameProcessed)
-            if input.UserInputType ~= Enum.UserInputType.Touch then return end
-            if freeCamJoystickTouch and input == freeCamJoystickTouch then
-                freeCamJoystickTouch = nil
-                freeCamJoystickInput = Vector2.zero
-            end
-        end)
-
-        freeCamTouchConns = {touchBeganConn, touchChangedConn, touchEndedConn}
-
-        -- Loop de movimiento
+        -- Loop de movimiento/rotación de la cámara
+        if freeCamConnection then freeCamConnection:Disconnect() end
         freeCamConnection = RunService.RenderStepped:Connect(function(dt)
+            -- ⛔ Guard: si FreeCam se apagó, salir sin tocar la cámara
             if not freeCamEnabled then return end
-            local moveVector = Vector3.zero
+
             local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
+            local moveVector = Vector3.zero
 
             if UserInputService.KeyboardEnabled then
+                -- PC: WASD + Space/Shift
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + rot.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - rot.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector = moveVector - rot.RightVector end
@@ -668,8 +614,14 @@ toggleFreeCam = function(state)
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
                 if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
             else
-                if freeCamJoystickInput.Magnitude > 0.1 then
-                    moveVector = (rot.LookVector * freeCamJoystickInput.Y) + (rot.RightVector * freeCamJoystickInput.X)
+                -- Android: usar Humanoid.MoveDirection (sí se actualiza con el joystick en Scriptable)
+                local c = LocalPlayer.Character
+                if c then
+                    local hum = c:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.MoveDirection.Magnitude > 0.05 then
+                        local localMove = Camera.CFrame:VectorToObjectSpace(hum.MoveDirection)
+                        moveVector = (rot.LookVector * -localMove.Z) + (rot.RightVector * localMove.X)
+                    end
                 end
             end
 
@@ -685,9 +637,15 @@ toggleFreeCam = function(state)
             if not freeCamEnabled then return end
             if gameProcessed then return end
 
+            -- Zona del joystick en Android: mitad inferior izquierda
+            local function isJoystickZone(pos)
+                if not isTouchDevice then return false end
+                local vp = Camera.ViewportSize
+                return pos.X < vp.X * 0.45 and pos.Y > vp.Y * 0.45
+            end
+
             if input.UserInputType == Enum.UserInputType.Touch then
-                if freeCamJoystickTouch and input == freeCamJoystickTouch then return end
-                if isTouchInJoystickZone(input.Position) then return end
+                if isJoystickZone(input.Position) then return end
                 camYaw = camYaw - input.Delta.X * 0.005
                 camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
             elseif input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
@@ -696,16 +654,18 @@ toggleFreeCam = function(state)
             end
         end)
     else
+        -- Salir de FreeCam: limpiar TODAS las conexiones y restaurar el estado normal
         if freeCamConnection then freeCamConnection:Disconnect() end
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
         for _, c in ipairs(freeCamTouchConns) do
             if c then c:Disconnect() end
         end
-        freeCamTouchConns = {}
         freeCamConnection = nil
         freeCamRotateConnection = nil
+        freeCamTouchConns = {}
         freeCamJoystickInput = Vector2.zero
         freeCamJoystickTouch = nil
+
         Camera.CameraType = Enum.CameraType.Custom
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
