@@ -42,6 +42,11 @@ local freeCamRotateConnection = nil
 local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
+-- ✅ Estado del joystick capturado directamente en Android
+local freeCamJoystickInput = Vector2.zero
+local freeCamJoystickTouch = nil
+local freeCamTouchConns = {}
+
 local savedLighting = {}
 local listeningFor = nil
 local QuickButtons = {}
@@ -109,8 +114,7 @@ local keybinds = {
     Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
 }
 
--- ✅ playerControls SOLO se usa para leer el MoveVector en Fly/FreeCam (Android).
---    NUNCA se llama Disable()/Enable() (eso rompía el joystick y la cámara).
+-- playerControls solo se usa para leer MoveVector en Fly (Android)
 local playerControls = nil
 task.spawn(function()
     local ok, playerModule = pcall(function()
@@ -249,7 +253,6 @@ MainPadding.PaddingTop = UDim.new(0, 10)
 MainPadding.PaddingLeft = UDim.new(0, 5)
 MainPadding.Parent = MainScroll
 
--- Switch de TP: solo se crea/usará en Android
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
 if not isTouchDevice then
     TPSwitchContainer.Visible = false
@@ -509,7 +512,6 @@ local function toggleFly(state)
     if QuickButtons["Fly"] then QuickButtons["Fly"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
 
     if state then
-        -- ✅ Limpieza previa de instancias/conexiones para evitar duplicados
         if flyConnection then flyConnection:Disconnect() end
         if flyBodyVelocity then flyBodyVelocity:Destroy() end
         if flyBodyGyro then flyBodyGyro:Destroy() end
@@ -566,10 +568,10 @@ local function toggleFly(state)
 end
 
 -- ==========================================
--- ✅ FREECAM (PC + ANDROID corregido v2)
---    - NO usa playerControls:Disable() (rompía joystick en Android y cámara en PC)
---    - PC: mouse libre + rotar con click derecho + WASD para moverse
---    - Android: rotar arrastrando fuera de la zona del joystick + joystick para traslación
+-- ✅ FREECAM v3 (PC + ANDROID corregido)
+--    PC: mouse libre + click derecho para rotar + WASD para moverse
+--    Android: joystick leído DIRECTO del touch (PlayerModule no reporta en Scriptable)
+--             + arrastrar fuera del joystick para rotar
 -- ==========================================
 toggleFreeCam = function(state)
     freeCamEnabled = state
@@ -587,23 +589,77 @@ toggleFreeCam = function(state)
         end
 
         Camera.CameraType = Enum.CameraType.Scriptable
-        -- ✅ PC: liberar mouse y mostrar cursor (fix del bug original de PC)
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
-        -- ❌ NO tocamos playerControls (rompía el joystick en Android)
 
         local look = Camera.CFrame.LookVector
         camYaw = math.atan2(-look.X, -look.Z)
         camPitch = math.asin(look.Y)
         camPos = Camera.CFrame.Position
 
-        -- Movimiento/rotación de la cámara
+        freeCamJoystickInput = Vector2.zero
+        freeCamJoystickTouch = nil
+
+        -- ==========================================
+        -- LECTURA DIRECTA DEL JOYSTICK (Android)
+        -- ==========================================
+        local function getJoystickCenterAndRadius()
+            local vp = Camera.ViewportSize
+            local center = Vector2.new(vp.X * 0.15, vp.Y * 0.75)
+            local radius = math.max(vp.X * 0.10, 60)
+            return center, radius
+        end
+
+        local function isTouchInJoystickZone(pos)
+            if not isTouchDevice then return false end
+            local center, radius = getJoystickCenterAndRadius()
+            return (pos - center).Magnitude <= radius * 1.3
+        end
+
+        -- Capturar el toque inicial dentro de la zona del joystick
+        local touchBeganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if not freeCamEnabled then return end
+            if gameProcessed then return end
+            if input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if isTouchInJoystickZone(input.Position) then
+                freeCamJoystickTouch = input
+                freeCamJoystickInput = Vector2.zero
+            end
+        end)
+
+        -- Actualizar el vector del joystick mientras se arrastra
+        local touchChangedConn = UserInputService.InputChanged:Connect(function(input, gameProcessed)
+            if not freeCamEnabled then return end
+            if gameProcessed then return end
+            if input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if freeCamJoystickTouch and input == freeCamJoystickTouch then
+                local center, radius = getJoystickCenterAndRadius()
+                local delta = input.Position - center
+                local mag = delta.Magnitude
+                local normalized = mag > radius and (delta.Unit * radius) or delta
+                freeCamJoystickInput = Vector2.new(
+                    normalized.X / radius,
+                    -normalized.Y / radius
+                )
+            end
+        end)
+
+        local touchEndedConn = UserInputService.InputEnded:Connect(function(input, gameProcessed)
+            if input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if freeCamJoystickTouch and input == freeCamJoystickTouch then
+                freeCamJoystickTouch = nil
+                freeCamJoystickInput = Vector2.zero
+            end
+        end)
+
+        freeCamTouchConns = {touchBeganConn, touchChangedConn, touchEndedConn}
+
+        -- Loop de movimiento
         freeCamConnection = RunService.RenderStepped:Connect(function(dt)
             if not freeCamEnabled then return end
             local moveVector = Vector3.zero
             local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
 
-            -- PC: WASD + Space/Shift para desplazarse
             if UserInputService.KeyboardEnabled then
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + rot.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - rot.LookVector end
@@ -612,14 +668,8 @@ toggleFreeCam = function(state)
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
                 if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
             else
-                -- Android: usar el joystick (MoveVector) SOLO para traslación, no para rotación
-                local stick = Vector3.zero
-                if playerControls then
-                    local ok, mv = pcall(function() return playerControls:GetMoveVector() end)
-                    if ok and mv then stick = mv end
-                end
-                if stick.Magnitude > 0.1 then
-                    moveVector = (rot.LookVector * -stick.Z) + (rot.RightVector * stick.X)
+                if freeCamJoystickInput.Magnitude > 0.1 then
+                    moveVector = (rot.LookVector * freeCamJoystickInput.Y) + (rot.RightVector * freeCamJoystickInput.X)
                 end
             end
 
@@ -629,21 +679,15 @@ toggleFreeCam = function(state)
             Camera.CFrame = CFrame.new(camPos, camPos + rot.LookVector)
         end)
 
-        -- Rotación de la cámara (PC: click derecho; Android: arrastrar fuera del joystick)
+        -- Rotación de la cámara
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
         freeCamRotateConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
             if not freeCamEnabled then return end
             if gameProcessed then return end
 
-            -- ✅ Android: ignorar toques en la zona del joystick (esquina inferior izquierda)
-            local function isInJoystickZone(pos)
-                if not isTouchDevice then return false end
-                local vp = Camera.ViewportSize
-                return pos.X < vp.X * 0.4 and pos.Y > vp.Y * 0.5
-            end
-
             if input.UserInputType == Enum.UserInputType.Touch then
-                if isInJoystickZone(input.Position) then return end
+                if freeCamJoystickTouch and input == freeCamJoystickTouch then return end
+                if isTouchInJoystickZone(input.Position) then return end
                 camYaw = camYaw - input.Delta.X * 0.005
                 camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
             elseif input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
@@ -654,12 +698,17 @@ toggleFreeCam = function(state)
     else
         if freeCamConnection then freeCamConnection:Disconnect() end
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
+        for _, c in ipairs(freeCamTouchConns) do
+            if c then c:Disconnect() end
+        end
+        freeCamTouchConns = {}
         freeCamConnection = nil
         freeCamRotateConnection = nil
+        freeCamJoystickInput = Vector2.zero
+        freeCamJoystickTouch = nil
         Camera.CameraType = Enum.CameraType.Custom
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         UserInputService.MouseIconEnabled = true
-        -- ❌ NO tocamos playerControls (nunca lo desactivamos)
 
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
@@ -670,7 +719,7 @@ toggleFreeCam = function(state)
 end
 
 -- ==========================================
--- ✅ GUARD DE RESPAWN: evita quedar congelado si mueres con FreeCam/Fly activo
+-- ✅ GUARD DE RESPAWN
 -- ==========================================
 LocalPlayer.CharacterAdded:Connect(function()
     if freeCamEnabled then toggleFreeCam(false) end
@@ -769,7 +818,6 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
--- ✅ Botón rápido TPS forzado a estar visible en Android
 if isTouchDevice then
     createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0.15, 0), function()
         tpEnabled = not tpEnabled
@@ -923,10 +971,8 @@ ConfigLabel.Font = Enum.Font.GothamBold
 ConfigLabel.TextSize = 9
 ConfigLabel.Parent = SettingsScroll
 
--- Config de botones rápidos: TPS solo aparece si es táctil
 if isTouchDevice then
     createQuickConfig("TPS", "TPS")
-    -- ✅ Forzar visible al iniciar en Android (por si el guardado quedó en false)
     task.defer(function()
         if QuickButtons["TPS"] then QuickButtons["TPS"].Visible = true end
     end)
@@ -1101,7 +1147,6 @@ local function createKeybindBox(text, keyName)
     end)
 end
 
--- Mostrar el keybind de TP solo en PC
 if not isTouchDevice then
     createKeybindBox("Tecla TP (PC)", "Teleport")
 end
@@ -1175,12 +1220,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
 
-        -- ✅ TP con el cursor (coordenadas del viewport de la cámara)
         if input.KeyCode == keybinds.Teleport then
             TeleportAt(Vector2.new(Mouse.X, Mouse.Y))
         end
 
-        -- ✅ En PC, la tecla de borrar elimina la pared apuntada por el cursor
         if input.KeyCode == keybinds.Delete then
             DeletePartAt(Vector2.new(Mouse.X, Mouse.Y))
         end
