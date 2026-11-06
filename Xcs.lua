@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Ventanas Separadas + TP Flotante + Miniaturas HD en Vivo + Buscador)
+-- HUB: xcs (Ventanas Separadas + Miniaturas HD Corregidas + Buscador)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -1366,14 +1366,28 @@ refreshPlayerList = function()
                 thumbImg.Position = UDim2.new(0, 0, 0.5, -11)
                 thumbImg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
                 thumbImg.BorderSizePixel = 0
-                thumbImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=42&h=42"
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                p.CharacterAppearanceLoaded:Connect(function()
-                    if thumbImg and thumbImg.Parent then
-                        thumbImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=42&h=42"
+                -- CARGA DE FOTO SEGURA CON REINTENTOS
+                task.spawn(function()
+                    local success, content = pcall(function()
+                        return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
+                    end)
+                    if success and content and thumbImg and thumbImg.Parent then
+                        thumbImg.Image = content
                     end
+                end)
+
+                p.CharacterAppearanceLoaded:Connect(function()
+                    task.spawn(function()
+                        local success, content = pcall(function()
+                            return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
+                        end)
+                        if success and content and thumbImg and thumbImg.Parent then
+                            thumbImg.Image = content
+                        end
+                    end)
                 end)
 
                 local pNameLabel = Instance.new("TextLabel")
