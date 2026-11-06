@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Buscador de Jugadores + Auto-Update + DisplayName + Miniatura + TP / View)
+-- HUB: xcs (Miniaturas en Vivo + Buscador + Auto-Update + Minimizar con X)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -126,7 +126,7 @@ MiniBtn.Text = "xcs"
 MiniBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MiniBtn.TextSize = 12
 MiniBtn.Font = Enum.Font.GothamBold
-MiniBtn.Visible = false
+MiniBtn.Visible = true
 MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
@@ -201,7 +201,7 @@ Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 4)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 18, 0, 18)
 MinimizeBtn.Position = UDim2.new(1, -20, 0, 3)
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
 MinimizeBtn.Text = "X"
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.TextSize = 10
@@ -1124,7 +1124,7 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     RestoreQuickBtn.Visible = quickButtonsMaster and loadButtonState("Restore")
 end)
 
-MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; MiniBtn.Visible = true end)
+MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; SettingsFrame.Visible = false; KeybindsFrame.Visible = false; MiniBtn.Visible = true end)
 MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible = false end)
 SettingsBtn.Activated:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
 CloseSettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = false end)
@@ -1211,7 +1211,6 @@ TpLabel.TextSize = 8
 TpLabel.TextXAlignment = Enum.TextXAlignment.Left
 TpLabel.Parent = KeybindsScroll
 
--- BARRA DE BÚSQUEDA
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -10, 0, 22)
 searchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -1259,10 +1258,15 @@ refreshPlayerList = function()
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                pcall(function()
-                    local content, isReady = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
-                    if isReady then thumbImg.Image = content end
-                end)
+                local function updateThumbnail()
+                    pcall(function()
+                        local content = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
+                        if content then thumbImg.Image = content end
+                    end)
+                end
+
+                updateThumbnail()
+                p.CharacterAppearanceLoaded:Connect(updateThumbnail)
 
                 local pNameLabel = Instance.new("TextLabel")
                 pNameLabel.Size = UDim2.new(0.42, 0, 1, 0)
