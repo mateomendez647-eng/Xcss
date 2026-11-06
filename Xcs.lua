@@ -401,10 +401,12 @@ refreshPlayerList = function()
     for _, child in ipairs(PlayerListContainer:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
+    
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             local displayName = p.DisplayName
             local userName = p.Name
+            
             if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
                 local row = Instance.new("Frame")
                 row.Size = UDim2.new(1, -10, 0, 26)
@@ -416,22 +418,30 @@ refreshPlayerList = function()
                 thumbImg.Position = UDim2.new(0, 0, 0.5, -11)
                 thumbImg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
                 thumbImg.BorderSizePixel = 0
+                thumbImg.Image = ""
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                -- Carga de miniatura optimizada con reintentos automáticos
+                -- ✅ SISTEMA DE CARGA ESTILO NEVOLINE / AK ADMIN
                 task.spawn(function()
-                    local content = ""
-                    local success = false
-                    for i = 1, 3 do
-                        success, content = pcall(function()
-                            return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
-                        end)
-                        if success and content ~= "" then break end
-                        task.wait(0.5)
+                    local userId = p.UserId
+                    local finalUrl = ""
+                    
+                    -- 1. Intentar obtener la URL oficial (Rápida y en alta calidad)
+                    local success, url = pcall(function()
+                        return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+                    end)
+                    
+                    if success and url and url ~= "" then
+                        finalUrl = url
+                    else
+                        -- 2. Si falla el servidor de Roblox, usamos el servidor web directo (Respaldo)
+                        finalUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=150&height=150&format=png"
                     end
-                    if success and content and thumbImg and thumbImg.Parent then
-                        thumbImg.Image = content
+                    
+                    -- 3. Aplicar la imagen
+                    if thumbImg and thumbImg.Parent then
+                        thumbImg.Image = finalUrl
                     end
                 end)
 
