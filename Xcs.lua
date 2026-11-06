@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (ESP de Jugadores + Imanes + Auto-Reconnect + Turbo)
+-- HUB: xcs (Versión Final con Menú TP de Jugadores y Botón Superior)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -48,6 +48,8 @@ local camPos = Vector3.new(0, 0, 0)
 local savedLighting = {}
 local listeningFor = nil
 local QuickButtons = {}
+local filterQuery = ""
+local spectatingPlayer = nil
 
 local function saveData(name, data)
     pcall(function()
@@ -140,16 +142,17 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 local Title = Instance.new("TextButton")
 Title.Size = UDim2.new(1, 0, 0, 25)
 Title.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-Title.Text = "xcs Hub"
+Title.Text = " xcs Hub"
 Title.TextColor3 = Color3.fromRGB(200, 200, 200)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 11
+Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
 local ResetPositionsBtn = Instance.new("TextButton")
 ResetPositionsBtn.Size = UDim2.new(0, 18, 0, 18)
-ResetPositionsBtn.Position = UDim2.new(1, -91, 0, 3)
+ResetPositionsBtn.Position = UDim2.new(1, -114, 0, 3)
 ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 ResetPositionsBtn.Text = "🔄"
 ResetPositionsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -159,13 +162,24 @@ Instance.new("UICorner", ResetPositionsBtn).CornerRadius = UDim.new(0, 4)
 
 local MasterQuickBtn = Instance.new("TextButton")
 MasterQuickBtn.Size = UDim2.new(0, 18, 0, 18)
-MasterQuickBtn.Position = UDim2.new(1, -68, 0, 3)
+MasterQuickBtn.Position = UDim2.new(1, -91, 0, 3)
 MasterQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 MasterQuickBtn.Text = "👁️"
 MasterQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MasterQuickBtn.TextSize = 10
 MasterQuickBtn.Parent = Title
 Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
+
+local PlayerWindowToggleBtn = Instance.new("TextButton")
+PlayerWindowToggleBtn.Size = UDim2.new(0, 18, 0, 18)
+PlayerWindowToggleBtn.Position = UDim2.new(1, -68, 0, 3)
+PlayerWindowToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowToggleBtn.Text = "TP"
+PlayerWindowToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerWindowToggleBtn.TextSize = 8
+PlayerWindowToggleBtn.Font = Enum.Font.GothamBold
+PlayerWindowToggleBtn.Parent = Title
+Instance.new("UICorner", PlayerWindowToggleBtn).CornerRadius = UDim.new(0, 4)
 
 local SettingsBtn = Instance.new("TextButton")
 SettingsBtn.Size = UDim2.new(0, 18, 0, 18)
@@ -255,6 +269,221 @@ local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
+-- ==========================================
+-- VENTANA DE TP A JUGADORES (Con Minimizar y Cerrar)
+-- ==========================================
+local PlayerWindow = Instance.new("Frame")
+PlayerWindow.Size = UDim2.new(0, 180, 0, 300)
+PlayerWindow.Position = loadPosition("PlayerWindow", UDim2.new(0, 300, 0, 100))
+PlayerWindow.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+PlayerWindow.BorderSizePixel = 0
+PlayerWindow.Visible = false
+PlayerWindow.Parent = ScreenGui
+Instance.new("UICorner", PlayerWindow).CornerRadius = UDim.new(0, 8)
+
+local PlayerWindowTitle = Instance.new("TextButton")
+PlayerWindowTitle.Size = UDim2.new(1, 0, 0, 25)
+PlayerWindowTitle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+PlayerWindowTitle.Text = " TP Jugadores"
+PlayerWindowTitle.TextColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowTitle.Font = Enum.Font.GothamBold
+PlayerWindowTitle.TextSize = 11
+PlayerWindowTitle.TextXAlignment = Enum.TextXAlignment.Left
+PlayerWindowTitle.Parent = PlayerWindow
+Instance.new("UICorner", PlayerWindowTitle).CornerRadius = UDim.new(0, 8)
+
+local PlayerWindowMinBtn = Instance.new("TextButton")
+PlayerWindowMinBtn.Size = UDim2.new(0, 18, 0, 18)
+PlayerWindowMinBtn.Position = UDim2.new(1, -43, 0, 3)
+PlayerWindowMinBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+PlayerWindowMinBtn.Text = "-"
+PlayerWindowMinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerWindowMinBtn.TextSize = 10
+PlayerWindowMinBtn.Font = Enum.Font.GothamBold
+PlayerWindowMinBtn.Parent = PlayerWindowTitle
+Instance.new("UICorner", PlayerWindowMinBtn).CornerRadius = UDim.new(0, 4)
+
+local PlayerWindowCloseBtn = Instance.new("TextButton")
+PlayerWindowCloseBtn.Size = UDim2.new(0, 18, 0, 18)
+PlayerWindowCloseBtn.Position = UDim2.new(1, -20, 0, 3)
+PlayerWindowCloseBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+PlayerWindowCloseBtn.Text = "X"
+PlayerWindowCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerWindowCloseBtn.TextSize = 10
+PlayerWindowCloseBtn.Font = Enum.Font.GothamBold
+PlayerWindowCloseBtn.Parent = PlayerWindowTitle
+Instance.new("UICorner", PlayerWindowCloseBtn).CornerRadius = UDim.new(0, 4)
+
+local PlayerWindowScroll = Instance.new("ScrollingFrame")
+PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -25)
+PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 25)
+PlayerWindowScroll.BackgroundTransparency = 1
+PlayerWindowScroll.BorderSizePixel = 0
+PlayerWindowScroll.ScrollBarThickness = 3
+PlayerWindowScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+PlayerWindowScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PlayerWindowScroll.Parent = PlayerWindow
+
+local PlayerWindowScrollList = Instance.new("UIListLayout")
+PlayerWindowScrollList.Padding = UDim.new(0, 6)
+PlayerWindowScrollList.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerWindowScrollList.Parent = PlayerWindowScroll
+
+local PlayerWindowPadding = Instance.new("UIPadding")
+PlayerWindowPadding.PaddingTop = UDim.new(0, 8)
+PlayerWindowPadding.PaddingLeft = UDim.new(0, 5)
+PlayerWindowPadding.Parent = PlayerWindowScroll
+
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -10, 0, 22)
+searchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+searchBox.Text = ""
+searchBox.PlaceholderText = "🔍 Buscar jugador..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 9
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = PlayerWindowScroll
+Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
+
+local PlayerListContainer = Instance.new("Frame")
+PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
+PlayerListContainer.AutomaticSize = Enum.AutomaticSize.Y
+PlayerListContainer.BackgroundTransparency = 1
+PlayerListContainer.Parent = PlayerWindowScroll
+
+local PlayerListLayout = Instance.new("UIListLayout")
+PlayerListLayout.Padding = UDim.new(0, 4)
+PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerListLayout.Parent = PlayerListContainer
+
+local function teleportToPlayer(targetPlayer)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+        end
+    end
+end
+
+local function spectatePlayer(targetPlayer)
+    if spectatingPlayer == targetPlayer then
+        spectatingPlayer = nil
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        end
+    else
+        spectatingPlayer = targetPlayer
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            Camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        end
+    end
+end
+
+local refreshPlayerList
+refreshPlayerList = function()
+    for _, child in ipairs(PlayerListContainer:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local displayName = p.DisplayName
+            local userName = p.Name
+            if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
+                local row = Instance.new("Frame")
+                row.Size = UDim2.new(1, -10, 0, 26)
+                row.BackgroundTransparency = 1
+                row.Parent = PlayerListContainer
+
+                local thumbImg = Instance.new("ImageLabel")
+                thumbImg.Size = UDim2.new(0, 22, 0, 22)
+                thumbImg.Position = UDim2.new(0, 0, 0.5, -11)
+                thumbImg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                thumbImg.BorderSizePixel = 0
+                thumbImg.Parent = row
+                Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
+
+                task.spawn(function()
+                    local success, content = pcall(function()
+                        return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
+                    end)
+                    if success and content and thumbImg and thumbImg.Parent then
+                        thumbImg.Image = content
+                    end
+                end)
+
+                local pNameLabel = Instance.new("TextLabel")
+                pNameLabel.Size = UDim2.new(0.42, 0, 1, 0)
+                pNameLabel.Position = UDim2.new(0, 26, 0, 0)
+                pNameLabel.BackgroundTransparency = 1
+                pNameLabel.Text = displayName
+                pNameLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+                pNameLabel.Font = Enum.Font.Gotham
+                pNameLabel.TextSize = 8
+                pNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                pNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                pNameLabel.Parent = row
+
+                local tpBtn = Instance.new("TextButton")
+                tpBtn.Size = UDim2.new(0, 24, 0, 20)
+                tpBtn.Position = UDim2.new(0.68, 0, 0.5, -10)
+                tpBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+                tpBtn.Text = "TP"
+                tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                tpBtn.Font = Enum.Font.GothamBold
+                tpBtn.TextSize = 8
+                tpBtn.Parent = row
+                Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+
+                tpBtn.MouseButton1Click:Connect(function()
+                    teleportToPlayer(p)
+                end)
+
+                local viewBtn = Instance.new("TextButton")
+                viewBtn.Size = UDim2.new(0, 28, 0, 20)
+                viewBtn.Position = UDim2.new(0.81, 0, 0.5, -10)
+                viewBtn.BackgroundColor3 = (spectatingPlayer == p) and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(50, 50, 50)
+                viewBtn.Text = "VIEW"
+                viewBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                viewBtn.Font = Enum.Font.GothamBold
+                viewBtn.TextSize = 7
+                viewBtn.Parent = row
+                Instance.new("UICorner", viewBtn).CornerRadius = UDim.new(0, 4)
+
+                viewBtn.MouseButton1Click:Connect(function()
+                    spectatePlayer(p)
+                    refreshPlayerList()
+                end)
+            end
+        end
+    end
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    filterQuery = searchBox.Text
+    refreshPlayerList()
+end)
+
+Players.PlayerAdded:Connect(refreshPlayerList)
+Players.PlayerRemoving:Connect(function(p)
+    if spectatingPlayer == p then spectatePlayer(p) end
+    refreshPlayerList()
+end)
+task.spawn(refreshPlayerList)
+
+PlayerWindowToggleBtn.MouseButton1Click:Connect(function()
+    PlayerWindow.Visible = not PlayerWindow.Visible
+end)
+PlayerWindowMinBtn.MouseButton1Click:Connect(function()
+    PlayerWindow.Visible = false
+end)
+PlayerWindowCloseBtn.MouseButton1Click:Connect(function()
+    PlayerWindow.Visible = false
+end)
+
+-- Ventana de Configuración
 local SettingsFrame = Instance.new("Frame")
 SettingsFrame.Size = UDim2.new(0, 180, 0, 300)
 SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0, 120, 0, 120))
@@ -686,10 +915,8 @@ end
 makeDraggable(MainFrame, "MainFrame")
 makeDraggable(MiniBtn, "MiniBtn")
 makeDraggable(SettingsFrame, "SettingsFrame")
+makeDraggable(PlayerWindow, "PlayerWindow")
 
--- ==========================================
--- BOTONES FLOTANTES CON SISTEMA DE IMANES
--- ==========================================
 local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 35, 0, 35)
@@ -837,6 +1064,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
             delfile("xcs_MainFrame.txt")
             delfile("xcs_MiniBtn.txt")
             delfile("xcs_SettingsFrame.txt")
+            delfile("xcs_PlayerWindow.txt")
             delfile("xcs_Quick_TPS.txt")
             delfile("xcs_Quick_Invisicam.txt")
             delfile("xcs_Quick_FPXRay.txt")
@@ -853,6 +1081,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     MainFrame.Position = UDim2.new(0, 100, 0, 100)
     MiniBtn.Position = UDim2.new(0, 15, 0, 200)
     SettingsFrame.Position = UDim2.new(0, 120, 0, 120)
+    PlayerWindow.Position = UDim2.new(0, 300, 0, 100)
 
     if QuickButtons["TPS"] then QuickButtons["TPS"].Position = UDim2.new(0, 60, 0, 100) end
     if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = UDim2.new(0, 100, 0, 100) end
