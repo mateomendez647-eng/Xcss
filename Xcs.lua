@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Final con Bolita Flotante "P" para TP)
+-- HUB: xcs (Versión Final con Fotos de Perfil Optimizadas y Bolita "P")
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -419,10 +419,17 @@ refreshPlayerList = function()
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
+                -- Carga de miniatura optimizada con reintentos automáticos
                 task.spawn(function()
-                    local success, content = pcall(function()
-                        return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
-                    end)
+                    local content = ""
+                    local success = false
+                    for i = 1, 3 do
+                        success, content = pcall(function()
+                            return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
+                        end)
+                        if success and content ~= "" then break end
+                        task.wait(0.5)
+                    end
                     if success and content and thumbImg and thumbImg.Parent then
                         thumbImg.Image = content
                     end
