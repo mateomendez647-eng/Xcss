@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Miniaturas HD en Vivo + Barra Minimizar + Buscador + Auto-Update)
+-- HUB: xcs (Ventanas Separadas + TP Flotante + Miniaturas HD en Vivo + Buscador)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -118,6 +118,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
+-- Bolita Principal (xcs)
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 45, 0, 45)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0, 200))
@@ -131,6 +132,21 @@ MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
+-- Bolita Independiente para la Lista TP
+local MiniTpBtn = Instance.new("TextButton")
+MiniTpBtn.Size = UDim2.new(0, 45, 0, 45)
+MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 70, 0, 200))
+MiniTpBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MiniTpBtn.Text = "TP"
+MiniTpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MiniTpBtn.TextSize = 12
+MiniTpBtn.Font = Enum.Font.GothamBold
+MiniTpBtn.Visible = false
+MiniTpBtn.Parent = ScreenGui
+Instance.new("UICorner", MiniTpBtn).CornerRadius = UDim.new(1, 0)
+Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
+
+-- Ventana Principal (Hub)
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 180, 0, 300)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
@@ -160,7 +176,7 @@ TitleText.Parent = Title
 
 local ResetPositionsBtn = Instance.new("TextButton")
 ResetPositionsBtn.Size = UDim2.new(0, 18, 0, 18)
-ResetPositionsBtn.Position = UDim2.new(1, -112, 0, 3)
+ResetPositionsBtn.Position = UDim2.new(1, -135, 0, 3)
 ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 ResetPositionsBtn.Text = "🔄"
 ResetPositionsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -170,7 +186,7 @@ Instance.new("UICorner", ResetPositionsBtn).CornerRadius = UDim.new(0, 4)
 
 local MasterQuickBtn = Instance.new("TextButton")
 MasterQuickBtn.Size = UDim2.new(0, 18, 0, 18)
-MasterQuickBtn.Position = UDim2.new(1, -89, 0, 3)
+MasterQuickBtn.Position = UDim2.new(1, -112, 0, 3)
 MasterQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 MasterQuickBtn.Text = "👁️"
 MasterQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -180,7 +196,7 @@ Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
 
 local KeybindsBtn = Instance.new("TextButton")
 KeybindsBtn.Size = UDim2.new(0, 18, 0, 18)
-KeybindsBtn.Position = UDim2.new(1, -66, 0, 3)
+KeybindsBtn.Position = UDim2.new(1, -89, 0, 3)
 KeybindsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 KeybindsBtn.Text = "⌨️"
 KeybindsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -190,7 +206,7 @@ Instance.new("UICorner", KeybindsBtn).CornerRadius = UDim.new(0, 4)
 
 local SettingsBtn = Instance.new("TextButton")
 SettingsBtn.Size = UDim2.new(0, 18, 0, 18)
-SettingsBtn.Position = UDim2.new(1, -43, 0, 3)
+SettingsBtn.Position = UDim2.new(1, -66, 0, 3)
 SettingsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 SettingsBtn.Text = "⚙️"
 SettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -198,10 +214,9 @@ SettingsBtn.TextSize = 10
 SettingsBtn.Parent = Title
 Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 4)
 
--- BOTÓN MINIMIZAR (Rayita _)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 18, 0, 18)
-MinimizeBtn.Position = UDim2.new(1, -43, 0, 3) -- Se acomoda automáticamente
+MinimizeBtn.Position = UDim2.new(1, -43, 0, 3)
 MinimizeBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
 MinimizeBtn.Text = "_"
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -210,7 +225,6 @@ MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.Parent = Title
 Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
 
--- BOTÓN CERRAR (X)
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 18, 0, 18)
 CloseBtn.Position = UDim2.new(1, -20, 0, 3)
@@ -221,14 +235,6 @@ CloseBtn.TextSize = 10
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = Title
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 4)
-
--- Ajustar posiciones de los botones del título para que entren bien
-SettingsBtn.Position = UDim2.new(1, -89, 0, 3)
-KeybindsBtn.Position = UDim2.new(1, -66, 0, 3)
-MasterQuickBtn.Position = UDim2.new(1, -112, 0, 3)
-ResetPositionsBtn.Position = UDim2.new(1, -135, 0, 3)
-MinimizeBtn.Position = UDim2.new(1, -43, 0, 3)
-CloseBtn.Position = UDim2.new(1, -20, 0, 3)
 
 local MainScroll = Instance.new("ScrollingFrame")
 MainScroll.Size = UDim2.new(1, 0, 1, -25)
@@ -297,6 +303,7 @@ local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
+-- Ventana de Configuración
 local SettingsFrame = Instance.new("Frame")
 SettingsFrame.Size = UDim2.new(0, 180, 0, 300)
 SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0, 120, 0, 120))
@@ -339,6 +346,7 @@ SettingsPadding.PaddingTop = UDim.new(0, 10)
 SettingsPadding.PaddingLeft = UDim.new(0, 5)
 SettingsPadding.Parent = SettingsScroll
 
+-- Ventana de Teclas
 local KeybindsFrame = Instance.new("Frame")
 KeybindsFrame.Size = UDim2.new(0, 180, 0, 300)
 KeybindsFrame.Position = loadPosition("KeybindsFrame", UDim2.new(0, 140, 0, 140))
@@ -380,6 +388,101 @@ local KeybindsPadding = Instance.new("UIPadding")
 KeybindsPadding.PaddingTop = UDim.new(0, 10)
 KeybindsPadding.PaddingLeft = UDim.new(0, 5)
 KeybindsPadding.Parent = KeybindsScroll
+
+-- VENTANA INDEPENDIENTE PARA EL TELEPORT / JUGADORES
+local PlayerWindow = Instance.new("Frame")
+PlayerWindow.Size = UDim2.new(0, 180, 0, 300)
+PlayerWindow.Position = loadPosition("PlayerWindow", UDim2.new(0, 300, 0, 100))
+PlayerWindow.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+PlayerWindow.BorderSizePixel = 0
+PlayerWindow.Visible = true
+PlayerWindow.Parent = ScreenGui
+Instance.new("UICorner", PlayerWindow).CornerRadius = UDim.new(0, 8)
+
+local PlayerWindowTitle = Instance.new("Frame")
+PlayerWindowTitle.Size = UDim2.new(1, 0, 0, 25)
+PlayerWindowTitle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+PlayerWindowTitle.BorderSizePixel = 0
+PlayerWindowTitle.Parent = PlayerWindow
+Instance.new("UICorner", PlayerWindowTitle).CornerRadius = UDim.new(0, 8)
+
+local PlayerWindowTitleText = Instance.new("TextLabel")
+PlayerWindowTitleText.Size = UDim2.new(0, 100, 1, 0)
+PlayerWindowTitleText.Position = UDim2.new(0, 8, 0, 0)
+PlayerWindowTitleText.BackgroundTransparency = 1
+PlayerWindowTitleText.Text = "TP Jugadores"
+PlayerWindowTitleText.TextColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowTitleText.Font = Enum.Font.GothamBold
+PlayerWindowTitleText.TextSize = 11
+PlayerWindowTitleText.TextXAlignment = Enum.TextXAlignment.Left
+PlayerWindowTitleText.Parent = PlayerWindowTitle
+
+local PlayerWindowMinBtn = Instance.new("TextButton")
+PlayerWindowMinBtn.Size = UDim2.new(0, 18, 0, 18)
+PlayerWindowMinBtn.Position = UDim2.new(1, -43, 0, 3)
+PlayerWindowMinBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+PlayerWindowMinBtn.Text = "_"
+PlayerWindowMinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerWindowMinBtn.TextSize = 10
+PlayerWindowMinBtn.Font = Enum.Font.GothamBold
+PlayerWindowMinBtn.Parent = PlayerWindowTitle
+Instance.new("UICorner", PlayerWindowMinBtn).CornerRadius = UDim.new(0, 4)
+
+local PlayerWindowCloseBtn = Instance.new("TextButton")
+PlayerWindowCloseBtn.Size = UDim2.new(0, 18, 0, 18)
+PlayerWindowCloseBtn.Position = UDim2.new(1, -20, 0, 3)
+PlayerWindowCloseBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+PlayerWindowCloseBtn.Text = "X"
+PlayerWindowCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerWindowCloseBtn.TextSize = 10
+PlayerWindowCloseBtn.Font = Enum.Font.GothamBold
+PlayerWindowCloseBtn.Parent = PlayerWindowTitle
+Instance.new("UICorner", PlayerWindowCloseBtn).CornerRadius = UDim.new(0, 4)
+
+local PlayerWindowScroll = Instance.new("ScrollingFrame")
+PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -25)
+PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 25)
+PlayerWindowScroll.BackgroundTransparency = 1
+PlayerWindowScroll.BorderSizePixel = 0
+PlayerWindowScroll.ScrollBarThickness = 3
+PlayerWindowScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+PlayerWindowScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PlayerWindowScroll.Parent = PlayerWindow
+
+local PlayerWindowScrollList = Instance.new("UIListLayout")
+PlayerWindowScrollList.Padding = UDim.new(0, 6)
+PlayerWindowScrollList.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerWindowScrollList.Parent = PlayerWindowScroll
+
+local PlayerWindowPadding = Instance.new("UIPadding")
+PlayerWindowPadding.PaddingTop = UDim.new(0, 8)
+PlayerWindowPadding.PaddingLeft = UDim.new(0, 5)
+PlayerWindowPadding.Parent = PlayerWindowScroll
+
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -10, 0, 22)
+searchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+searchBox.Text = ""
+searchBox.PlaceholderText = "🔍 Buscar jugador..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 9
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = PlayerWindowScroll
+Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
+
+local PlayerListContainer = Instance.new("Frame")
+PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
+PlayerListContainer.AutomaticSize = Enum.AutomaticSize.Y
+PlayerListContainer.BackgroundTransparency = 1
+PlayerListContainer.Parent = PlayerWindowScroll
+
+local PlayerListLayout = Instance.new("UIListLayout")
+PlayerListLayout.Padding = UDim.new(0, 4)
+PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerListLayout.Parent = PlayerListContainer
 
 local function teleportToPlayer(targetPlayer)
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -796,8 +899,10 @@ end
 
 makeDraggable(MainFrame, "MainFrame")
 makeDraggable(MiniBtn, "MiniBtn")
+makeDraggable(MiniTpBtn, "MiniTpBtn")
 makeDraggable(SettingsFrame, "SettingsFrame")
 makeDraggable(KeybindsFrame, "KeybindsFrame")
+makeDraggable(PlayerWindow, "PlayerWindow")
 
 -- ==========================================
 -- BOTONES FLOTANTES CON SISTEMA DE IMANES
@@ -948,8 +1053,10 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
         if delfile then
             delfile("xcs_MainFrame.txt")
             delfile("xcs_MiniBtn.txt")
+            delfile("xcs_MiniTpBtn.txt")
             delfile("xcs_SettingsFrame.txt")
             delfile("xcs_KeybindsFrame.txt")
+            delfile("xcs_PlayerWindow.txt")
             delfile("xcs_Quick_TPS.txt")
             delfile("xcs_Quick_Invisicam.txt")
             delfile("xcs_Quick_FPXRay.txt")
@@ -965,19 +1072,10 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
 
     MainFrame.Position = UDim2.new(0, 100, 0, 100)
     MiniBtn.Position = UDim2.new(0, 15, 0, 200)
+    MiniTpBtn.Position = UDim2.new(0, 70, 0, 200)
     SettingsFrame.Position = UDim2.new(0, 120, 0, 120)
     KeybindsFrame.Position = UDim2.new(0, 140, 0, 140)
-
-    if QuickButtons["TPS"] then QuickButtons["TPS"].Position = UDim2.new(0, 60, 0, 100) end
-    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = UDim2.new(0, 100, 0, 100) end
-    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].Position = UDim2.new(0, 140, 0, 100) end
-    if QuickButtons["ESP"] then QuickButtons["ESP"].Position = UDim2.new(0, 180, 0, 100) end
-    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = UDim2.new(0, 220, 0, 100) end
-    if QuickButtons["Noclip"] then QuickButtons["Noclip"].Position = UDim2.new(0, 60, 0, 145) end
-    if QuickButtons["Fly"] then QuickButtons["Fly"].Position = UDim2.new(0, 100, 0, 145) end
-    if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = UDim2.new(0, 140, 0, 145) end
-    if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = UDim2.new(0, 180, 0, 145) end
-    if QuickButtons["Restore"] then QuickButtons["Restore"].Position = UDim2.new(0, 60, 0, 190) end
+    PlayerWindow.Position = UDim2.new(0, 300, 0, 100)
 
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     task.wait(0.3)
@@ -1145,7 +1243,7 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     RestoreQuickBtn.Visible = quickButtonsMaster and loadButtonState("Restore")
 end)
 
--- MINIMIZAR (Convierte en bolita y oculta menús)
+-- Controles Menú Principal
 MinimizeBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
     SettingsFrame.Visible = false
@@ -1153,12 +1251,26 @@ MinimizeBtn.MouseButton1Click:Connect(function()
     MiniBtn.Visible = true
 end)
 
--- CERRAR POR COMPLETO (Destruye el script de la pantalla)
 CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
+    MainFrame.Visible = false
+    SettingsFrame.Visible = false
+    KeybindsFrame.Visible = false
 end)
 
 MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible = false end)
+
+-- Controles Ventana TP / Jugadores
+PlayerWindowMinBtn.MouseButton1Click:Connect(function()
+    PlayerWindow.Visible = false
+    MiniTpBtn.Visible = true
+end)
+
+PlayerWindowCloseBtn.MouseButton1Click:Connect(function()
+    PlayerWindow.Visible = false
+end)
+
+MiniTpBtn.Activated:Connect(function() PlayerWindow.Visible = true; MiniTpBtn.Visible = false end)
+
 SettingsBtn.Activated:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
 CloseSettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = false end)
 
@@ -1234,40 +1346,6 @@ createKeybindBox("Tecla ESP", "ESP")
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
-local TpLabel = Instance.new("TextLabel")
-TpLabel.Size = UDim2.new(1, 0, 0, 15)
-TpLabel.BackgroundTransparency = 1
-TpLabel.Text = "--- Jugadores (Display) ---"
-TpLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
-TpLabel.Font = Enum.Font.GothamBold
-TpLabel.TextSize = 8
-TpLabel.TextXAlignment = Enum.TextXAlignment.Left
-TpLabel.Parent = KeybindsScroll
-
-local searchBox = Instance.new("TextBox")
-searchBox.Size = UDim2.new(1, -10, 0, 22)
-searchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-searchBox.Text = ""
-searchBox.PlaceholderText = "🔍 Buscar jugador..."
-searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 9
-searchBox.ClearTextOnFocus = false
-searchBox.Parent = KeybindsScroll
-Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
-
-local PlayerListContainer = Instance.new("Frame")
-PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
-PlayerListContainer.AutomaticSize = Enum.AutomaticSize.Y
-PlayerListContainer.BackgroundTransparency = 1
-PlayerListContainer.Parent = KeybindsScroll
-
-local PlayerListLayout = Instance.new("UIListLayout")
-PlayerListLayout.Padding = UDim.new(0, 4)
-PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-PlayerListLayout.Parent = PlayerListContainer
-
 local refreshPlayerList
 refreshPlayerList = function()
     for _, child in ipairs(PlayerListContainer:GetChildren()) do
@@ -1292,7 +1370,6 @@ refreshPlayerList = function()
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                -- Actualización automática si el jugador cambia de skin/ropa
                 p.CharacterAppearanceLoaded:Connect(function()
                     if thumbImg and thumbImg.Parent then
                         thumbImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=42&h=42"
