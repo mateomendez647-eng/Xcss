@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Miniaturas en Vivo + Buscador + Auto-Update + Minimizar con X)
+-- HUB: xcs (Miniaturas HD en Vivo + Barra Minimizar + Buscador + Auto-Update)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -126,7 +126,7 @@ MiniBtn.Text = "xcs"
 MiniBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MiniBtn.TextSize = 12
 MiniBtn.Font = Enum.Font.GothamBold
-MiniBtn.Visible = true
+MiniBtn.Visible = false
 MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
@@ -198,16 +198,37 @@ SettingsBtn.TextSize = 10
 SettingsBtn.Parent = Title
 Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 4)
 
+-- BOTÓN MINIMIZAR (Rayita _)
 local MinimizeBtn = Instance.new("TextButton")
 MinimizeBtn.Size = UDim2.new(0, 18, 0, 18)
-MinimizeBtn.Position = UDim2.new(1, -20, 0, 3)
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-MinimizeBtn.Text = "X"
+MinimizeBtn.Position = UDim2.new(1, -43, 0, 3) -- Se acomoda automáticamente
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+MinimizeBtn.Text = "_"
 MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeBtn.TextSize = 10
 MinimizeBtn.Font = Enum.Font.GothamBold
 MinimizeBtn.Parent = Title
 Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
+
+-- BOTÓN CERRAR (X)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 18, 0, 18)
+CloseBtn.Position = UDim2.new(1, -20, 0, 3)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 10
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = Title
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 4)
+
+-- Ajustar posiciones de los botones del título para que entren bien
+SettingsBtn.Position = UDim2.new(1, -89, 0, 3)
+KeybindsBtn.Position = UDim2.new(1, -66, 0, 3)
+MasterQuickBtn.Position = UDim2.new(1, -112, 0, 3)
+ResetPositionsBtn.Position = UDim2.new(1, -135, 0, 3)
+MinimizeBtn.Position = UDim2.new(1, -43, 0, 3)
+CloseBtn.Position = UDim2.new(1, -20, 0, 3)
 
 local MainScroll = Instance.new("ScrollingFrame")
 MainScroll.Size = UDim2.new(1, 0, 1, -25)
@@ -1124,7 +1145,19 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     RestoreQuickBtn.Visible = quickButtonsMaster and loadButtonState("Restore")
 end)
 
-MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; SettingsFrame.Visible = false; KeybindsFrame.Visible = false; MiniBtn.Visible = true end)
+-- MINIMIZAR (Convierte en bolita y oculta menús)
+MinimizeBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    SettingsFrame.Visible = false
+    KeybindsFrame.Visible = false
+    MiniBtn.Visible = true
+end)
+
+-- CERRAR POR COMPLETO (Destruye el script de la pantalla)
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
 MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible = false end)
 SettingsBtn.Activated:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
 CloseSettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = false end)
@@ -1255,18 +1288,16 @@ refreshPlayerList = function()
                 thumbImg.Position = UDim2.new(0, 0, 0.5, -11)
                 thumbImg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
                 thumbImg.BorderSizePixel = 0
+                thumbImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=42&h=42"
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                local function updateThumbnail()
-                    pcall(function()
-                        local content = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
-                        if content then thumbImg.Image = content end
-                    end)
-                end
-
-                updateThumbnail()
-                p.CharacterAppearanceLoaded:Connect(updateThumbnail)
+                -- Actualización automática si el jugador cambia de skin/ropa
+                p.CharacterAppearanceLoaded:Connect(function()
+                    if thumbImg and thumbImg.Parent then
+                        thumbImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. p.UserId .. "&w=42&h=42"
+                    end
+                end)
 
                 local pNameLabel = Instance.new("TextLabel")
                 pNameLabel.Size = UDim2.new(0.42, 0, 1, 0)
