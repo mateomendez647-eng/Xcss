@@ -42,7 +42,6 @@ local freeCamRotateConnection = nil
 local camYaw, camPitch = 0, 0
 local camPos = Vector3.new(0, 0, 0)
 
--- Estado de conexiones touch de FreeCam (para limpiar al salir)
 local freeCamTouchConns = {}
 local freeCamJoystickInput = Vector2.zero
 local freeCamJoystickTouch = nil
@@ -112,7 +111,6 @@ local keybinds = {
     Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
 }
 
--- playerControls solo se usa para leer MoveVector en Fly (Android)
 local playerControls = nil
 task.spawn(function()
     local ok, playerModule = pcall(function()
@@ -125,7 +123,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- INTERFAZ PRINCIPAL COMPACTA CON SCROLL
+-- INTERFAZ PRINCIPAL
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "xcsStyleHub"
@@ -133,25 +131,31 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
+-- ==========================================
+-- ✅ BOTÓN MINIMIZADO (esquina superior derecha, visible al iniciar)
+-- ==========================================
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 45, 0, 45)
-MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0.4, 0))
+MiniBtn.Position = UDim2.new(0.92, -22, 0.15, 0)  -- posición fija en esquina superior derecha
 MiniBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MiniBtn.Text = "xcs"
 MiniBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MiniBtn.TextSize = 12
 MiniBtn.Font = Enum.Font.GothamBold
-MiniBtn.Visible = false
+MiniBtn.Visible = true                             -- visible al iniciar
 MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
+-- ==========================================
+-- ✅ MENÚ PRINCIPAL (arranca minimizado)
+-- ==========================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 180, 0, 300)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0.5, -90, 0.5, -150))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
-MainFrame.Visible = true
+MainFrame.Visible = false                          -- oculto al iniciar
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
@@ -566,7 +570,7 @@ local function toggleFly(state)
 end
 
 -- ==========================================
--- ✅ FREECAM v4 (PC + ANDROID)
+-- FREECAM v4 (PC + ANDROID)
 -- ==========================================
 toggleFreeCam = function(state)
     freeCamEnabled = state
@@ -668,7 +672,7 @@ toggleFreeCam = function(state)
 end
 
 -- ==========================================
--- ✅ GUARD DE RESPAWN
+-- GUARD DE RESPAWN
 -- ==========================================
 LocalPlayer.CharacterAdded:Connect(function()
     if freeCamEnabled then toggleFreeCam(false) end
@@ -1010,8 +1014,10 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- ✅ Al minimizar, el botón vuelve SIEMPRE a la esquina superior derecha
 MinimizeBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
+    MiniBtn.Position = UDim2.new(0.92, -22, 0.15, 0)
     MiniBtn.Visible = true
 end)
 
@@ -1191,7 +1197,7 @@ local function isOverGui(pos)
 end
 
 -- ==========================================
--- DETECCIÓN TÁCTIL ROBUSTA (tap = borrar/TP, drag = rotar cámara)
+-- DETECCIÓN TÁCTIL (tap = borrar/TP, drag = rotar cámara)
 -- ==========================================
 local touchState = {
     active = false,
@@ -1249,7 +1255,6 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
         local totalMoved = touchState.totalMoved
         local isCameraDrag = touchState.isCameraDrag
 
-        -- ✅ Tap: mismo criterio que el TP
         local isTap = duration < TAP_MAX_TIME
                       and not isCameraDrag
                       and totalMoved < TAP_MAX_MOVE
@@ -1264,8 +1269,6 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
             return
         end
 
-        -- ✅ Ahora el borrador usa TAP, igual que el TP
-        --    Borrador tiene prioridad si ambos están activos
         if deleteModeEnabled then
             DeletePartAt(input.Position)
         elseif tpEnabled then
