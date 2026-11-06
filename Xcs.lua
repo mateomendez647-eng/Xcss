@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Interruptores en Menú Principal + Miniaturas HD + Ventanas Separadas)
+-- HUB: xcs (Botón TP Flotante + Miniaturas HD + Interruptores en Menú)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -132,7 +132,7 @@ MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
 
--- Bolita Independiente para la Lista TP
+-- Bolita Independiente para la Lista TP (MiniTpBtn)
 local MiniTpBtn = Instance.new("TextButton")
 MiniTpBtn.Size = UDim2.new(0, 45, 0, 45)
 MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 70, 0, 200))
@@ -292,7 +292,7 @@ MainPadding.PaddingTop = UDim.new(0, 10)
 MainPadding.PaddingLeft = UDim.new(0, 5)
 MainPadding.Parent = MainScroll
 
-local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
+local TPSwitchBg, TPSwitchKnob = createSwitch(MainScroll, "TPS")
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
@@ -981,11 +981,11 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
+-- Botón flotante para abrir/cerrar la ventana de TP (vinculado a su interruptor en el menú)
 createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0, 100), function()
-    tpEnabled = not tpEnabled
-    TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-end, function() return tpEnabled end)
+    PlayerWindow.Visible = not PlayerWindow.Visible
+    MiniTpBtn.Visible = not PlayerWindow.Visible
+end, function() return PlayerWindow.Visible end)
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
 createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
