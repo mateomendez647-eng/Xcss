@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Ventanas Separadas + Config de Botones Flotantes + Miniaturas HD)
+-- HUB: xcs (Interruptores en Menú Principal + Miniaturas HD + Ventanas Separadas)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -243,7 +243,8 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 300)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+MainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -292,8 +293,6 @@ MainPadding.PaddingLeft = UDim.new(0, 5)
 MainPadding.Parent = MainScroll
 
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
-if not isTouchDevice then TPSwitchContainer.Visible = false end
-
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
@@ -969,7 +968,7 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                         if diffX < snapDistance and diffY < 50 then
                             btn.Position = UDim2.new(0, otherBtn.Position.X.Offset, 0, btn.Position.Y.Offset)
                         elseif diffY < snapDistance and diffX < 50 then
-                            btn.Position = UDim2.new(0, btn.Position.X.Offset, 0, otherBtn.Position.Y.Offset)
+                            btn.Position = UDim2.new(0, btn.Position.X.Offset, 0, btn.Position.Y.Offset)
                         end
                     end
                 end
@@ -1079,17 +1078,13 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 end)
 
-local function createQuickConfig(text, btnName)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 20)
-    container.BackgroundTransparency = 1
-    container.Parent = SettingsScroll
-
-    local bg, knob = createSwitch(container, text)
+local function applyQuickToggle(bg, btnName)
     local isEnabled = loadButtonState(btnName)
     bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-
+    local knob = bg:FindFirstChildOfClass("Frame")
+    if knob then
+        knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    end
     if isEnabled and QuickButtons[btnName] and quickButtonsMaster then
         QuickButtons[btnName].Visible = true
     end
@@ -1098,7 +1093,9 @@ local function createQuickConfig(text, btnName)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
             bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-            knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+            if knob then
+                knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+            end
 
             if QuickButtons[btnName] and quickButtonsMaster then
                 QuickButtons[btnName].Visible = newState
@@ -1108,111 +1105,15 @@ local function createQuickConfig(text, btnName)
     end)
 end
 
-local function createSliderSwitch(btnName, switchText, sliderText, minVal, maxVal, defaultVal, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.BackgroundTransparency = 1
-    container.Parent = SettingsScroll
-
-    local bg, knob = createSwitch(container, switchText)
-    local isEnabled = loadButtonState(btnName)
-    bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if isEnabled and QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = true end
-
-    bg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
-            bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-            knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-            if QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = newState end
-            saveButtonState(btnName, newState)
-        end
-    end)
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.8, 0, 0, 10)
-    label.Position = UDim2.new(0.1, 0, 0, 22)
-    label.BackgroundTransparency = 1
-    label.Text = sliderText .. " (" .. defaultVal .. ")"
-    label.TextColor3 = Color3.fromRGB(150, 150, 150)
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 8
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
-
-    local barBg = Instance.new("TextButton")
-    barBg.Size = UDim2.new(0.8, 0, 0, 6)
-    barBg.Position = UDim2.new(0.1, 0, 0, 36)
-    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    barBg.Text = ""
-    barBg.Parent = container
-    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    fill.Parent = barBg
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local isSliding = false
-    barBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then isSliding = true end end)
-    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then isSliding = false end end)
-    UserInputService.InputChanged:Connect(function(input)
-        if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
-            fill.Size = UDim2.new(posX, 0, 1, 0)
-            local val = math.floor(minVal + (maxVal - minVal) * posX)
-            label.Text = sliderText .. " (" .. val .. ")"
-            callback(val)
-        end
-    end)
-end
-
-local ConfigLabel = Instance.new("TextLabel")
-ConfigLabel.Size = UDim2.new(1, 0, 0, 15)
-ConfigLabel.BackgroundTransparency = 1
-ConfigLabel.Text = "--- Botones Flotantes ---"
-ConfigLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
-ConfigLabel.Font = Enum.Font.GothamBold
-ConfigLabel.TextSize = 9
-ConfigLabel.Parent = SettingsScroll
-
-createQuickConfig("Botón TPS", "TPS")
-createQuickConfig("Invisicam", "Invisicam")
-createQuickConfig("FP X-Ray", "FPXRay")
-createQuickConfig("ESP", "ESP")
-createQuickConfig("Borrador", "DeleteMode")
-createQuickConfig("Noclip", "Noclip")
-
-createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
-createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
-createQuickConfig("Fullbright", "Fullbright")
-
-local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, "Botón Restaurar")
-local rstEnabled = loadButtonState("Restore")
-RestoreConfigBg.BackgroundColor3 = rstEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-RestoreConfigKnob.Position = rstEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-if rstEnabled and quickButtonsMaster then RestoreQuickBtn.Visible = true end
-
-RestoreConfigBg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local newState = not (RestoreConfigBg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
-        RestoreConfigBg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-        RestoreConfigKnob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-        if quickButtonsMaster then RestoreQuickBtn.Visible = newState end
-        saveButtonState("Restore", newState)
-    end
-end)
-
-SwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end end)
-FPXRaySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFPXRay(not fpXRayEnabled) end end)
-ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
-DeleteSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleDeleteMode(not deleteModeEnabled) end end)
-NoclipSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end end)
-FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFly(not flyEnabled) end end)
-FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFreeCam(not freeCamEnabled) end end)
-FullbrightSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end end)
+applyQuickToggle(TPSwitchBg, "TPS")
+applyQuickToggle(SwitchBg, "Invisicam")
+applyQuickToggle(FPXRaySwitchBg, "FPXRay")
+applyQuickToggle(ESPSwitchBg, "ESP")
+applyQuickToggle(DeleteSwitchBg, "DeleteMode")
+applyQuickToggle(NoclipSwitchBg, "Noclip")
+applyQuickToggle(FlySwitchBg, "Fly")
+applyQuickToggle(FreeCamSwitchBg, "FreeCam")
+applyQuickToggle(FullbrightSwitchBg, "Fullbright")
 
 MasterQuickBtn.MouseButton1Click:Connect(function()
     quickButtonsMaster = not quickButtonsMaster
