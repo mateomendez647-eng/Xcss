@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Ventanas Separadas + Miniaturas HD Corregidas + Buscador)
+-- HUB: xcs (Ventanas Separadas + Config de Botones Flotantes + Miniaturas HD)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -982,14 +982,11 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     end)
 end
 
-if isTouchDevice then
-    createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0, 100), function()
-        tpEnabled = not tpEnabled
-        TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-        TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    end, function() return tpEnabled end)
-    QuickButtons["TPS"].Visible = true
-end
+createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0, 100), function()
+    tpEnabled = not tpEnabled
+    TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+end, function() return tpEnabled end)
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
 createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
@@ -1181,10 +1178,7 @@ ConfigLabel.Font = Enum.Font.GothamBold
 ConfigLabel.TextSize = 9
 ConfigLabel.Parent = SettingsScroll
 
-if isTouchDevice then
-    createQuickConfig("TPS", "TPS")
-    task.defer(function() if QuickButtons["TPS"] then QuickButtons["TPS"].Visible = true end end)
-end
+createQuickConfig("Botón TPS", "TPS")
 createQuickConfig("Invisicam", "Invisicam")
 createQuickConfig("FP X-Ray", "FPXRay")
 createQuickConfig("ESP", "ESP")
@@ -1211,16 +1205,6 @@ RestoreConfigBg.InputBegan:Connect(function(input)
     end
 end)
 
-if isTouchDevice then
-    TPSwitchBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            tpEnabled = not tpEnabled
-            TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-            TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-        end
-    end)
-end
-
 SwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end end)
 FPXRaySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFPXRay(not fpXRayEnabled) end end)
 ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
@@ -1235,7 +1219,7 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     for name, btn in pairs(QuickButtons) do
         if quickButtonsMaster then
-            btn.Visible = (name == "TPS" and isTouchDevice) or loadButtonState(name)
+            btn.Visible = loadButtonState(name)
         else
             btn.Visible = false
         end
@@ -1369,7 +1353,6 @@ refreshPlayerList = function()
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                -- CARGA DE FOTO SEGURA CON REINTENTOS
                 task.spawn(function()
                     local success, content = pcall(function()
                         return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42)
