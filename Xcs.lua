@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Final con Menú TP de Jugadores y Botón Superior)
+-- HUB: xcs (Ventana TP con Minimizar y Cerrar Corregidos)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -270,7 +270,7 @@ local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
 -- ==========================================
--- VENTANA DE TP A JUGADORES (Con Minimizar y Cerrar)
+-- VENTANA DE TP A JUGADORES (Con Minimizar y Cerrar corregidos)
 -- ==========================================
 local PlayerWindow = Instance.new("Frame")
 PlayerWindow.Size = UDim2.new(0, 180, 0, 300)
@@ -473,14 +473,23 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 task.spawn(refreshPlayerList)
 
-PlayerWindowToggleBtn.MouseButton1Click:Connect(function()
-    PlayerWindow.Visible = not PlayerWindow.Visible
-end)
+-- Minimizar (la rayita - oculta solo el contenido de la ventana TP)
+local isPlayerWindowMinimizing = false
 PlayerWindowMinBtn.MouseButton1Click:Connect(function()
-    PlayerWindow.Visible = false
+    isPlayerWindowMinimizing = not isPlayerWindowMinimizing
+    PlayerWindowScroll.Visible = not isPlayerWindowMinimizing
+    PlayerWindow.Size = isPlayerWindowMinimizing and UDim2.new(0, 180, 0, 25) or UDim2.new(0, 180, 0, 300)
+    PlayerWindowMinBtn.Text = isPlayerWindowMinimizing and "+" or "-"
 end)
+
+-- Cerrar (la X cierra por completo la ventana de TP)
 PlayerWindowCloseBtn.MouseButton1Click:Connect(function()
     PlayerWindow.Visible = false
+end)
+
+-- Botón superior para abrir/cerrar el panel de TP
+PlayerWindowToggleBtn.MouseButton1Click:Connect(function()
+    PlayerWindow.Visible = not PlayerWindow.Visible
 end)
 
 -- Ventana de Configuración
