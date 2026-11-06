@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Final Corregida)
+-- HUB: xcs (Versión Final con Gestión de Bolitas en Panel de Teclas)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -21,6 +21,7 @@ local freeCamEnabled = false
 local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
+local quickButtonsMaster = true
 
 local spectatingPlayer = nil
 local filterQuery = ""
@@ -47,6 +48,7 @@ local camPos = Vector3.new(0, 0, 0)
 
 local savedLighting = {}
 local listeningFor = nil
+local QuickButtons = {}
 
 local function saveData(name, data)
     pcall(function()
@@ -81,6 +83,9 @@ local function loadPosition(name, defaultUDim2)
     end
     return defaultUDim2
 end
+
+local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, tostring(state)) end
+local function loadButtonState(btnName) return loadData("BtnState_" .. btnName, "true") == "true" end
 
 local function saveKeybind(keyName, keyCode) saveData("Key_" .. keyName, keyCode.Name) end
 local function loadKeybind(keyName, defaultCode)
@@ -134,7 +139,7 @@ MiniTpBtn.Text = "TP"
 MiniTpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MiniTpBtn.TextSize = 12
 MiniTpBtn.Font = Enum.Font.GothamBold
-MiniTpBtn.Visible = true
+MiniTpBtn.Visible = false
 MiniTpBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniTpBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
@@ -169,13 +174,23 @@ TitleText.Parent = Title
 
 local ResetPositionsBtn = Instance.new("TextButton")
 ResetPositionsBtn.Size = UDim2.new(0, 18, 0, 18)
-ResetPositionsBtn.Position = UDim2.new(1, -89, 0, 3)
+ResetPositionsBtn.Position = UDim2.new(1, -112, 0, 3)
 ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 ResetPositionsBtn.Text = "🔄"
 ResetPositionsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ResetPositionsBtn.TextSize = 9
 ResetPositionsBtn.Parent = Title
 Instance.new("UICorner", ResetPositionsBtn).CornerRadius = UDim.new(0, 4)
+
+local MasterQuickBtn = Instance.new("TextButton")
+MasterQuickBtn.Size = UDim2.new(0, 18, 0, 18)
+MasterQuickBtn.Position = UDim2.new(1, -89, 0, 3)
+MasterQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+MasterQuickBtn.Text = "👁️"
+MasterQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MasterQuickBtn.TextSize = 10
+MasterQuickBtn.Parent = Title
+Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
 
 local KeybindsBtn = Instance.new("TextButton")
 KeybindsBtn.Size = UDim2.new(0, 18, 0, 18)
@@ -275,7 +290,7 @@ local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
--- Ventana de Teclas
+-- Ventana de Teclas / Configuración de Bolitas
 local KeybindsFrame = Instance.new("Frame")
 KeybindsFrame.Size = UDim2.new(0, 180, 0, 300)
 KeybindsFrame.Position = loadPosition("KeybindsFrame", UDim2.new(0, 140, 0, 140))
@@ -825,7 +840,145 @@ makeDraggable(MiniTpBtn, "MiniTpBtn")
 makeDraggable(KeybindsFrame, "KeybindsFrame")
 makeDraggable(PlayerWindow, "PlayerWindow")
 
--- Lógica de los interruptores del Menú Principal
+-- ==========================================
+-- BOTONES FLOTANTES CON SISTEMA DE IMANES
+-- ==========================================
+local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 35, 0, 35)
+    btn.Position = loadPosition("Quick_" .. name, initialPos)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    btn.BackgroundTransparency = 0.2
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 9
+    btn.Font = Enum.Font.GothamBold
+    btn.Visible = quickButtonsMaster and loadButtonState("QuickVis_" .. name)
+    btn.Active = true
+    btn.Parent = ScreenGui
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
+
+    QuickButtons[name] = btn
+
+    local startTouchPos = nil
+    local isDragging = false
+    local dragStartScreenPos = nil
+    local initialButtonPos = nil
+
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            startTouchPos = input.Position
+            isDragging = false
+            dragStartScreenPos = input.Position
+            initialButtonPos = btn.Position
+        end
+    end)
+
+    btn.InputChanged:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and dragStartScreenPos then
+            if (input.Position - dragStartScreenPos).Magnitude > 6 then
+                isDragging = true
+                local delta = input.Position - dragStartScreenPos
+                local vpSize = Camera.ViewportSize
+                
+                local newX = math.clamp(initialButtonPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - btn.AbsoluteSize.X))
+                local newY = math.clamp(initialButtonPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - btn.AbsoluteSize.Y))
+                
+                btn.Position = UDim2.new(0, newX, 0, newY)
+            end
+        end
+    end)
+
+    btn.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if startTouchPos and not isDragging then
+                toggleFunc()
+            end
+            if isDragging then
+                local snapDistance = 35
+                for otherName, otherBtn in pairs(QuickButtons) do
+                    if otherName ~= name and otherBtn.Visible then
+                        local diffX = math.abs(btn.Position.X.Offset - otherBtn.Position.X.Offset)
+                        local diffY = math.abs(btn.Position.Y.Offset - otherBtn.Position.Y.Offset)
+                        
+                        if diffX < snapDistance and diffY < 50 then
+                            btn.Position = UDim2.new(0, otherBtn.Position.X.Offset, 0, btn.Position.Y.Offset)
+                        elseif diffY < snapDistance and diffX < 50 then
+                            btn.Position = UDim2.new(0, btn.Position.X.Offset, 0, btn.Position.Y.Offset)
+                        end
+                    end
+                end
+                savePosition("Quick_" .. name, btn.Position)
+            end
+            startTouchPos = nil
+            isDragging = false
+            dragStartScreenPos = nil
+        end
+    end)
+end
+
+createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0, 100), function()
+    PlayerWindow.Visible = not PlayerWindow.Visible
+end, function() return PlayerWindow.Visible end)
+
+createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
+createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
+createQuickBtn("ESP", "ESP", UDim2.new(0, 180, 0, 100), function() toggleESP(not espEnabled) end, function() return espEnabled end)
+createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 220, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end)
+createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0, 145), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
+createQuickBtn("Fly", "FLY", UDim2.new(0, 100, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
+createQuickBtn("FreeCam", "CAM", UDim2.new(0, 140, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
+createQuickBtn("Fullbright", "LGT", UDim2.new(0, 180, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
+
+local RestoreQuickBtn = Instance.new("TextButton")
+RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
+RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190)) 
+RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+RestoreQuickBtn.BackgroundTransparency = 0.2
+RestoreQuickBtn.Text = "RST"
+RestoreQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RestoreQuickBtn.TextSize = 9
+RestoreQuickBtn.Font = Enum.Font.GothamBold
+RestoreQuickBtn.Visible = quickButtonsMaster and loadButtonState("QuickVis_Restore")
+RestoreQuickBtn.Parent = ScreenGui
+Instance.new("UICorner", RestoreQuickBtn).CornerRadius = UDim.new(1, 0)
+QuickButtons["Restore"] = RestoreQuickBtn
+
+local rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos = nil, false, nil, nil
+RestoreQuickBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        rStartPos = input.Position
+        rIsDragging = false
+        rDragStartScreen = input.Position
+        rInitBtnPos = RestoreQuickBtn.Position
+    end
+end)
+RestoreQuickBtn.InputChanged:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and rDragStartScreen then
+        if (input.Position - rDragStartScreen).Magnitude > 6 then
+            rIsDragging = true
+            local delta = input.Position - rDragStartScreen
+            local vpSize = Camera.ViewportSize
+            local newX = math.clamp(rInitBtnPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - RestoreQuickBtn.AbsoluteSize.X))
+            local newY = math.clamp(rInitBtnPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - RestoreQuickBtn.AbsoluteSize.Y))
+            RestoreQuickBtn.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end
+end)
+RestoreQuickBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if rStartPos and not rIsDragging then
+            RestoreMap()
+            RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+            task.wait(0.3)
+            RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        end
+        if rIsDragging then savePosition("Quick_Restore", RestoreQuickBtn.Position) end
+        rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos = nil, false, nil, nil
+    end
+end)
+
+-- Lógica de interruptores del Menú Principal
 local function setupSwitch(bg, toggleFunc, getState)
     bg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -845,6 +998,19 @@ setupSwitch(FlySwitchBg, toggleFly, function() return flyEnabled end)
 setupSwitch(FreeCamSwitchBg, toggleFreeCam, function() return freeCamEnabled end)
 setupSwitch(FullbrightSwitchBg, toggleFullbright, function() return fullbrightEnabled end)
 
+-- Botón Ojito Maestro para ocultar/mostrar bolitas flotantes
+MasterQuickBtn.MouseButton1Click:Connect(function()
+    quickButtonsMaster = not quickButtonsMaster
+    MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    for name, btn in pairs(QuickButtons) do
+        if quickButtonsMaster then
+            btn.Visible = loadButtonState("QuickVis_" .. name)
+        else
+            btn.Visible = false
+        end
+    end
+end)
+
 ResetPositionsBtn.MouseButton1Click:Connect(function()
     pcall(function()
         if delfile then
@@ -853,6 +1019,16 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
             delfile("xcs_MiniTpBtn.txt")
             delfile("xcs_KeybindsFrame.txt")
             delfile("xcs_PlayerWindow.txt")
+            delfile("xcs_Quick_TPS.txt")
+            delfile("xcs_Quick_Invisicam.txt")
+            delfile("xcs_Quick_FPXRay.txt")
+            delfile("xcs_Quick_ESP.txt")
+            delfile("xcs_Quick_DeleteMode.txt")
+            delfile("xcs_Quick_Noclip.txt")
+            delfile("xcs_Quick_Fly.txt")
+            delfile("xcs_Quick_FreeCam.txt")
+            delfile("xcs_Quick_Fullbright.txt")
+            delfile("xcs_Quick_Restore.txt")
         end
     end)
 
@@ -867,14 +1043,12 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 end)
 
--- Controles Menú Principal (Minimizar / Cerrar Completo)
 MinimizeBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
     KeybindsFrame.Visible = false
     MiniBtn.Visible = true
 end)
 
--- Botón X: Borra todo el script y desactiva funciones por completo
 CloseBtn.MouseButton1Click:Connect(function()
     toggleInvisicam(false)
     toggleFPXRay(false)
@@ -889,17 +1063,13 @@ end)
 
 MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible = false end)
 
--- Controles Ventana TP / Jugadores Independiente
 PlayerWindowMinBtn.MouseButton1Click:Connect(function()
     PlayerWindow.Visible = false
-    MiniTpBtn.Visible = true
 end)
 
 PlayerWindowCloseBtn.MouseButton1Click:Connect(function()
     PlayerWindow.Visible = false
 end)
-
-MiniTpBtn.Activated:Connect(function() PlayerWindow.Visible = true; MiniTpBtn.Visible = false end)
 
 KeybindsBtn.Activated:Connect(function() KeybindsFrame.Visible = not KeybindsFrame.Visible end)
 CloseKeybindsBtn.MouseButton1Click:Connect(function() KeybindsFrame.Visible = false end)
@@ -972,6 +1142,71 @@ createKeybindBox("Tecla X-Ray", "XRay")
 createKeybindBox("Tecla ESP", "ESP")
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
+
+-- SECCIÓN ABAJO EN EL PANEL DE TECLAS PARA ACTIVAR/DESACTIVAR BOLITAS FLOTANTES INDIVIDUALMENTE
+local BubbleHeader = Instance.new("TextLabel")
+BubbleHeader.Size = UDim2.new(1, 0, 0, 20)
+BubbleHeader.BackgroundTransparency = 1
+BubbleHeader.Text = "--- Mostrar Bolitas Flotantes ---"
+BubbleHeader.TextColor3 = Color3.fromRGB(100, 100, 100)
+BubbleHeader.Font = Enum.Font.GothamBold
+BubbleHeader.TextSize = 9
+BubbleHeader.Parent = KeybindsScroll
+
+local function createBubbleToggle(btnName, displayName)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 20)
+    container.BackgroundTransparency = 1
+    container.Parent = KeybindsScroll
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.6, 0, 1, 0)
+    label.Position = UDim2.new(0.1, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = displayName
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 9
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local bg = Instance.new("TextButton")
+    bg.Size = UDim2.new(0, 30, 0, 16)
+    bg.Position = UDim2.new(0.75, 0, 0.5, -8)
+    local isVisible = loadButtonState("QuickVis_" .. btnName)
+    bg.BackgroundColor3 = isVisible and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    bg.Text = ""
+    bg.Parent = container
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 12, 0, 12)
+    knob.Position = isVisible and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.Parent = bg
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    bg.MouseButton1Click:Connect(function()
+        local newState = not loadButtonState("QuickVis_" .. btnName)
+        saveButtonState("QuickVis_" .. btnName, newState)
+        bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+        knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+        if QuickButtons[btnName] then
+            QuickButtons[btnName].Visible = quickButtonsMaster and newState
+        end
+    end)
+end
+
+createBubbleToggle("TPS", "Bolita TPS")
+createBubbleToggle("Invisicam", "Bolita INV")
+createBubbleToggle("FPXRay", "Bolita XRY")
+createBubbleToggle("ESP", "Bolita ESP")
+createBubbleToggle("DeleteMode", "Bolita DEL")
+createBubbleToggle("Noclip", "Bolita NOC")
+createBubbleToggle("Fly", "Bolita FLY")
+createBubbleToggle("FreeCam", "Bolita CAM")
+createBubbleToggle("Fullbright", "Bolita LGT")
+createBubbleToggle("Restore", "Bolita RST")
 
 local refreshPlayerList
 refreshPlayerList = function()
