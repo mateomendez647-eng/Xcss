@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Ventana TP con Minimizar y Cerrar Corregidos)
+-- HUB: xcs (Versión Final con Bolita Flotante "P" para TP)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -129,6 +129,20 @@ MiniBtn.Visible = false
 MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
+
+-- Bolita flotante "P" para el TP de jugadores
+local MiniTpBtn = Instance.new("TextButton")
+MiniTpBtn.Size = UDim2.new(0, 45, 0, 45)
+MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 70, 0, 200))
+MiniTpBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MiniTpBtn.Text = "P"
+MiniTpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MiniTpBtn.TextSize = 14
+MiniTpBtn.Font = Enum.Font.GothamBold
+MiniTpBtn.Visible = false
+MiniTpBtn.Parent = ScreenGui
+Instance.new("UICorner", MiniTpBtn).CornerRadius = UDim.new(1, 0)
+Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 180, 0, 300)
@@ -270,7 +284,7 @@ local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
 -- ==========================================
--- VENTANA DE TP A JUGADORES (Con Minimizar y Cerrar corregidos)
+-- VENTANA DE TP A JUGADORES
 -- ==========================================
 local PlayerWindow = Instance.new("Frame")
 PlayerWindow.Size = UDim2.new(0, 180, 0, 300)
@@ -473,23 +487,28 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 task.spawn(refreshPlayerList)
 
--- Minimizar (la rayita - oculta solo el contenido de la ventana TP)
-local isPlayerWindowMinimizing = false
+-- Minimizar la ventana de TP: oculta la ventana y muestra la bolita "P"
 PlayerWindowMinBtn.MouseButton1Click:Connect(function()
-    isPlayerWindowMinimizing = not isPlayerWindowMinimizing
-    PlayerWindowScroll.Visible = not isPlayerWindowMinimizing
-    PlayerWindow.Size = isPlayerWindowMinimizing and UDim2.new(0, 180, 0, 25) or UDim2.new(0, 180, 0, 300)
-    PlayerWindowMinBtn.Text = isPlayerWindowMinimizing and "+" or "-"
+    PlayerWindow.Visible = false
+    MiniTpBtn.Visible = true
 end)
 
--- Cerrar (la X cierra por completo la ventana de TP)
+-- Cerrar por completo la ventana de TP
 PlayerWindowCloseBtn.MouseButton1Click:Connect(function()
     PlayerWindow.Visible = false
+    MiniTpBtn.Visible = false
 end)
 
 -- Botón superior para abrir/cerrar el panel de TP
 PlayerWindowToggleBtn.MouseButton1Click:Connect(function()
     PlayerWindow.Visible = not PlayerWindow.Visible
+    MiniTpBtn.Visible = false
+end)
+
+-- Activar la bolita "P" para abrir de nuevo la ventana de TP
+MiniTpBtn.Activated:Connect(function()
+    PlayerWindow.Visible = true
+    MiniTpBtn.Visible = false
 end)
 
 -- Ventana de Configuración
@@ -923,6 +942,7 @@ end
 
 makeDraggable(MainFrame, "MainFrame")
 makeDraggable(MiniBtn, "MiniBtn")
+makeDraggable(MiniTpBtn, "MiniTpBtn")
 makeDraggable(SettingsFrame, "SettingsFrame")
 makeDraggable(PlayerWindow, "PlayerWindow")
 
@@ -1072,6 +1092,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
         if delfile then
             delfile("xcs_MainFrame.txt")
             delfile("xcs_MiniBtn.txt")
+            delfile("xcs_MiniTpBtn.txt")
             delfile("xcs_SettingsFrame.txt")
             delfile("xcs_PlayerWindow.txt")
             delfile("xcs_Quick_TPS.txt")
@@ -1089,6 +1110,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
 
     MainFrame.Position = UDim2.new(0, 100, 0, 100)
     MiniBtn.Position = UDim2.new(0, 15, 0, 200)
+    MiniTpBtn.Position = UDim2.new(0, 70, 0, 200)
     SettingsFrame.Position = UDim2.new(0, 120, 0, 120)
     PlayerWindow.Position = UDim2.new(0, 300, 0, 100)
 
