@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Botones flotantes corregidos sin saltos)
+-- HUB: xcs (Botones flotantes con Sistema de Imanes y sin saltos)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -61,7 +61,6 @@ local function loadData(name, default)
     return default
 end
 
--- Guardar y cargar posiciones usando exclusivamente Offset para evitar saltos de escala
 local function savePosition(name, pos)
     saveData(name, string.format("%.2f,%.2f", pos.X.Offset, pos.Y.Offset))
 end
@@ -143,7 +142,6 @@ Title.TextSize = 11
 Title.Parent = MainFrame
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
--- Botón de Reiniciar Posiciones (al lado del ojo)
 local ResetPositionsBtn = Instance.new("TextButton")
 ResetPositionsBtn.Size = UDim2.new(0, 18, 0, 18)
 ResetPositionsBtn.Position = UDim2.new(1, -91, 0, 3)
@@ -584,7 +582,6 @@ LocalPlayer.CharacterAdded:Connect(function()
     if flyEnabled then toggleFly(false) end
 end)
 
--- Sistema de arrastre robusto basado en Offset puro (sin saltos a la esquina)
 local function makeDraggable(frame, saveName)
     local dragging = false
     local dragInput = nil
@@ -630,7 +627,7 @@ makeDraggable(MiniBtn, "MiniBtn")
 makeDraggable(SettingsFrame, "SettingsFrame")
 
 -- ==========================================
--- BOTONES FLOTANTES LIBRES Y SEGUROS
+-- BOTONES FLOTANTES CON SISTEMA DE IMANES
 -- ==========================================
 local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     local btn = Instance.new("TextButton")
@@ -685,6 +682,22 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
             if isDragging then
+                -- SISTEMA DE IMANES (SNAP TO GRID / ALINEACIÓN AUTOMÁTICA)
+                local snapDistance = 35
+                for otherName, otherBtn in pairs(QuickButtons) do
+                    if otherName ~= name and otherBtn.Visible then
+                        local diffX = math.abs(btn.Position.X.Offset - otherBtn.Position.X.Offset)
+                        local diffY = math.abs(btn.Position.Y.Offset - otherBtn.Position.Y.Offset)
+                        
+                        -- Si se acerca horizontalmente, alinear eje X
+                        if diffX < snapDistance and diffY < 50 then
+                            btn.Position = UDim2.new(0, otherBtn.Position.X.Offset, 0, btn.Position.Y.Offset)
+                        -- Si se acerca verticalmente, alinear eje Y
+                        elseif diffY < snapDistance and diffX < 50 then
+                            btn.Position = UDim2.new(0, btn.Position.X.Offset, 0, otherBtn.Position.Y.Offset)
+                        end
+                    end
+                end
                 savePosition("Quick_" .. name, btn.Position)
             end
             startTouchPos = nil
@@ -711,7 +724,6 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 100, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 140, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 180, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
--- Botón Restaurar
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
 RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190)) 
@@ -760,9 +772,6 @@ RestoreQuickBtn.InputEnded:Connect(function(input)
     end
 end)
 
--- ==========================================
--- LÓGICA DEL BOTÓN DE RESETEO DE POSICIONES (🔄)
--- ==========================================
 ResetPositionsBtn.MouseButton1Click:Connect(function()
     pcall(function()
         if delfile then
