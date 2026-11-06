@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Botones flotantes con Sistema de Imanes y sin saltos)
+-- HUB: xcs (ESP de Jugadores + Imanes + Auto-Reconnect + Turbo)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -20,10 +20,12 @@ local flyEnabled = false
 local freeCamEnabled = false
 local fullbrightEnabled = false
 local deleteModeEnabled = false
+local espEnabled = false
 local quickButtonsMaster = true
 
 local flySpeed = 50
 local freeCamSpeed = 50
+local turboMultiplier = 2
 
 local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -33,8 +35,10 @@ local flyBodyVelocity = nil
 local flyBodyGyro = nil
 local fpXRayConnection = nil
 local invisicamConnection = nil
+local espConnection = nil
 local transparentParts = {}
 local deletedPartsMemory = {}
+local espHighlights = {}
 
 local freeCamConnection = nil
 local freeCamRotateConnection = nil
@@ -102,6 +106,7 @@ local keybinds = {
     XRay       = loadKeybind("XRay",       Enum.KeyCode.K),
     Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
     Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
+    ESP        = loadKeybind("ESP",        Enum.KeyCode.H),
 }
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -190,7 +195,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 300)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 330)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -243,6 +248,7 @@ if not isTouchDevice then TPSwitchContainer.Visible = false end
 
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
+local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
 local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
 local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
@@ -290,6 +296,49 @@ local SettingsPadding = Instance.new("UIPadding")
 SettingsPadding.PaddingTop = UDim.new(0, 10)
 SettingsPadding.PaddingLeft = UDim.new(0, 5)
 SettingsPadding.Parent = SettingsScroll
+
+-- LÓGICA DE ESP DE JUGADORES
+local function removeESP()
+    for _, hl in pairs(espHighlights) do
+        if hl and hl.Parent then hl:Destroy() end
+    end
+    espHighlights = {}
+end
+
+local function toggleESP(state)
+    espEnabled = state
+    ESPSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    ESPSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if QuickButtons["ESP"] then QuickButtons["ESP"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+
+    if state then
+        if espConnection then espConnection:Disconnect() end
+        espConnection = RunService.RenderStepped:Connect(function()
+            if not espEnabled then return end
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    local char = plr.Character
+                    local hl = espHighlights[plr]
+                    if not hl or not hl.Parent then
+                        hl = Instance.new("Highlight")
+                        hl.Name = "xcsESP"
+                        hl.FillColor = Color3.fromRGB(255, 0, 80)
+                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        hl.Parent = char
+                        espHighlights[plr] = hl
+                    end
+                end
+            end
+        end)
+    else
+        if espConnection then espConnection:Disconnect() end
+        espConnection = nil
+        removeESP()
+    end
+end
 
 local function toggleNoclip(state)
     noclipEnabled = state
@@ -478,6 +527,11 @@ local function toggleFly(state)
             local c = LocalPlayer.Character
             if not c or not c:FindFirstChild("HumanoidRootPart") or not flyBodyVelocity or not flyBodyGyro then return end
 
+            local currentFlySpeed = flySpeed
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                currentFlySpeed = flySpeed * turboMultiplier
+            end
+
             local moveVector = Vector3.zero
             if UserInputService.KeyboardEnabled then
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + Camera.CFrame.LookVector end
@@ -485,12 +539,11 @@ local function toggleFly(state)
                 if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector = moveVector - Camera.CFrame.RightVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector = moveVector + Camera.CFrame.RightVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
             else
                 moveVector = getMoveDirection()
             end
 
-            flyBodyVelocity.Velocity = moveVector.Magnitude > 0 and (moveVector.Unit * flySpeed) or Vector3.zero
+            flyBodyVelocity.Velocity = moveVector.Magnitude > 0 and (moveVector.Unit * currentFlySpeed) or Vector3.zero
             flyBodyGyro.CFrame = Camera.CFrame
         end)
     else
@@ -527,13 +580,17 @@ toggleFreeCam = function(state)
             local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
             local moveVector = Vector3.zero
 
+            local currentFreeCamSpeed = freeCamSpeed
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                currentFreeCamSpeed = freeCamSpeed * turboMultiplier
+            end
+
             if UserInputService.KeyboardEnabled then
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + rot.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - rot.LookVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector = moveVector - rot.RightVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector = moveVector + rot.RightVector end
                 if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveVector = moveVector - Vector3.new(0, 1, 0) end
             else
                 local c = LocalPlayer.Character
                 if c then
@@ -546,7 +603,7 @@ toggleFreeCam = function(state)
             end
 
             if moveVector.Magnitude > 0 then
-                camPos = camPos + (moveVector.Unit * freeCamSpeed * dt)
+                camPos = camPos + (moveVector.Unit * currentFreeCamSpeed * dt)
             end
             Camera.CFrame = CFrame.new(camPos, camPos + rot.LookVector)
         end)
@@ -577,9 +634,13 @@ toggleFreeCam = function(state)
     end
 end
 
-LocalPlayer.CharacterAdded:Connect(function()
-    if freeCamEnabled then toggleFreeCam(false) end
-    if flyEnabled then toggleFly(false) end
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    if noclipEnabled then toggleNoclip(true) end
+    if invisicamEnabled then toggleInvisicam(true) end
+    if fpXRayEnabled then toggleFPXRay(true) end
+    if fullbrightEnabled then toggleFullbright(true) end
+    if espEnabled then toggleESP(true) end
 end)
 
 local function makeDraggable(frame, saveName)
@@ -682,17 +743,14 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
                 btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
             end
             if isDragging then
-                -- SISTEMA DE IMANES (SNAP TO GRID / ALINEACIÓN AUTOMÁTICA)
                 local snapDistance = 35
                 for otherName, otherBtn in pairs(QuickButtons) do
                     if otherName ~= name and otherBtn.Visible then
                         local diffX = math.abs(btn.Position.X.Offset - otherBtn.Position.X.Offset)
                         local diffY = math.abs(btn.Position.Y.Offset - otherBtn.Position.Y.Offset)
                         
-                        -- Si se acerca horizontalmente, alinear eje X
                         if diffX < snapDistance and diffY < 50 then
                             btn.Position = UDim2.new(0, otherBtn.Position.X.Offset, 0, btn.Position.Y.Offset)
-                        -- Si se acerca verticalmente, alinear eje Y
                         elseif diffY < snapDistance and diffX < 50 then
                             btn.Position = UDim2.new(0, btn.Position.X.Offset, 0, otherBtn.Position.Y.Offset)
                         end
@@ -718,7 +776,8 @@ end
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
 createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXRay(not fpXRayEnabled) end, function() return fpXRayEnabled end)
-createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 180, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end)
+createQuickBtn("ESP", "ESP", UDim2.new(0, 180, 0, 100), function() toggleESP(not espEnabled) end, function() return espEnabled end)
+createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 220, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end)
 createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0, 145), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
 createQuickBtn("Fly", "FLY", UDim2.new(0, 100, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 140, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
@@ -781,6 +840,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
             delfile("xcs_Quick_TPS.txt")
             delfile("xcs_Quick_Invisicam.txt")
             delfile("xcs_Quick_FPXRay.txt")
+            delfile("xcs_Quick_ESP.txt")
             delfile("xcs_Quick_DeleteMode.txt")
             delfile("xcs_Quick_Noclip.txt")
             delfile("xcs_Quick_Fly.txt")
@@ -797,7 +857,8 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     if QuickButtons["TPS"] then QuickButtons["TPS"].Position = UDim2.new(0, 60, 0, 100) end
     if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = UDim2.new(0, 100, 0, 100) end
     if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].Position = UDim2.new(0, 140, 0, 100) end
-    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = UDim2.new(0, 180, 0, 100) end
+    if QuickButtons["ESP"] then QuickButtons["ESP"].Position = UDim2.new(0, 180, 0, 100) end
+    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = UDim2.new(0, 220, 0, 100) end
     if QuickButtons["Noclip"] then QuickButtons["Noclip"].Position = UDim2.new(0, 60, 0, 145) end
     if QuickButtons["Fly"] then QuickButtons["Fly"].Position = UDim2.new(0, 100, 0, 145) end
     if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = UDim2.new(0, 140, 0, 145) end
@@ -914,6 +975,7 @@ if isTouchDevice then
 end
 createQuickConfig("Invisicam", "Invisicam")
 createQuickConfig("FP X-Ray", "FPXRay")
+createQuickConfig("ESP", "ESP")
 createQuickConfig("Borrador", "DeleteMode")
 createQuickConfig("Noclip", "Noclip")
 
@@ -949,6 +1011,7 @@ end
 
 SwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end end)
 FPXRaySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFPXRay(not fpXRayEnabled) end end)
+ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
 DeleteSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleDeleteMode(not deleteModeEnabled) end end)
 NoclipSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end end)
 FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFly(not flyEnabled) end end)
@@ -1029,6 +1092,7 @@ createKeybindBox("Tecla Fly", "Fly")
 createKeybindBox("Tecla Free Cam", "FreeCam")
 createKeybindBox("Tecla Fullbright", "Fullbright")
 createKeybindBox("Tecla X-Ray", "XRay")
+createKeybindBox("Tecla ESP", "ESP")
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
@@ -1080,6 +1144,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.FreeCam then toggleFreeCam(not freeCamEnabled) end
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
+        if input.KeyCode == keybinds.ESP then toggleESP(not espEnabled) end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
         if input.KeyCode == keybinds.Teleport then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
         if input.KeyCode == keybinds.Delete then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
