@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa con Infinite Jump y Reset Arreglado)
+-- HUB: xcs (Versión Sigilosa - RST Arreglado)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -101,7 +101,11 @@ local function loadPosition(name, defaultUDim2)
     return defaultUDim2
 end
 local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, tostring(state)) end
-local function loadButtonState(btnName) return loadData("BtnState_" .. btnName, "true") == "true" end
+-- ✅ FORZAMOS A QUE EL BOTÓN RESTAURAR ESTÉ ENCENDIDO POR DEFECTO
+local function loadButtonState(btnName) 
+    local defaultState = (btnName == "Restore") and "true" or "true"
+    return loadData("BtnState_" .. btnName, defaultState) == "true" 
+end
 local function saveKeybind(keyName, keyCode) saveData("Key_" .. keyName, keyCode.Name) end
 local function loadKeybind(keyName, defaultCode)
     local saved = loadData("Key_" .. keyName, nil)
@@ -1010,6 +1014,7 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
+-- ✅ CREACIÓN DEL BOTÓN RESTAURAR (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
 RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190)) 
@@ -1023,6 +1028,11 @@ RestoreQuickBtn.Visible = false
 RestoreQuickBtn.Parent = ScreenGui
 Instance.new("UICorner", RestoreQuickBtn).CornerRadius = UDim.new(1, 0)
 QuickButtons["Restore"] = RestoreQuickBtn
+
+-- ✅ FORZAMOS SU APARICIÓN AQUÍ MISMO (Ya que el botón existe)
+if loadButtonState("Restore") and quickButtonsMaster then
+    RestoreQuickBtn.Visible = true
+end
 
 local rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos
 RestoreQuickBtn.InputBegan:Connect(function(input)
@@ -1230,7 +1240,6 @@ local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, "Botón 
 local rstEnabled = loadButtonState("Restore")
 RestoreConfigBg.BackgroundColor3 = rstEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
 RestoreConfigKnob.Position = rstEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-if rstEnabled and quickButtonsMaster then RestoreQuickBtn.Visible = true end
 
 RestoreConfigBg.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
