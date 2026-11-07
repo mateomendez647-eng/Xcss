@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa - Anti-VC Fijo)
+-- HUB: xcs (Versión Sigilosa - Anti-VC Directo AK/Novoline)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -50,7 +50,7 @@ local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
-local antiVCEnabled = false -- 🎙️ Estado del Anti-VC Continuo
+local antiVCEnabled = false -- 🎙️ Estado interno del Anti-VC Directo
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -66,7 +66,6 @@ local flyBodyGyro = nil
 local fpXRayConnection = nil
 local invisicamConnection = nil
 local espConnection = nil
-local antiVCConnection = nil
 local transparentParts = {}
 local deletedPartsMemory = {}
 local espHighlights = {}
@@ -297,6 +296,57 @@ MainPadding.Parent = MainScroll
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
 if not isTouchDevice then TPSwitchContainer.Visible = false end
 
+-- 🎙️ Función de Anti-VC Directo (Estilo AK Admin / Novoline)
+local function TriggerAntiVC()
+    antiVCEnabled = not antiVCEnabled
+    pcall(function()
+        if antiVCEnabled then
+            -- Intercepta el baneo de micro por metatabla de forma instantánea al tocar
+            if hookmetamethod and getnamecallmethod then
+                local oldNamecall
+                oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                    local method = getnamecallmethod()
+                    if antiVCEnabled and self == VoiceChatService and (method == "LeaveVoice" or method == "PublishAudioOff") then
+                        return nil -- Bloquea la orden de baneo del servidor
+                    end
+                    return oldNamecall(self, ...)
+                end))
+            end
+            if VoiceChatService then
+                VoiceChatService:EnableVoiceChat()
+            end
+        end
+    end)
+end
+
+-- Botón de Acción Directa Anti-VC colocado arriba en el Menú Principal
+local AntiVCBtnContainer = Instance.new("Frame")
+AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 26)
+AntiVCBtnContainer.BackgroundTransparency = 1
+AntiVCBtnContainer.Parent = MainScroll
+
+local AntiVCActionBtn = Instance.new("TextButton")
+AntiVCActionBtn.Size = UDim2.new(0.9, 0, 1, 0)
+AntiVCActionBtn.Position = UDim2.new(0.05, 0, 0, 0)
+AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (CLICK)"
+AntiVCActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AntiVCActionBtn.Font = Enum.Font.GothamBold
+AntiVCActionBtn.TextSize = 9
+AntiVCActionBtn.Parent = AntiVCBtnContainer
+Instance.new("UICorner", AntiVCActionBtn).CornerRadius = UDim.new(0, 5)
+
+AntiVCActionBtn.MouseButton1Click:Connect(function()
+    TriggerAntiVC()
+    if antiVCEnabled then
+        AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        AntiVCActionBtn.Text = "✅ ANTI-VC ACTIVADO"
+    else
+        AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (CLICK)"
+    end
+end)
+
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
@@ -306,41 +356,6 @@ local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Ju
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
-
--- 🎙️ Interruptor Anti-VC Continuo (Con Palomita / Switch)
-local AntiVCSwitchBg, AntiVCSwitchKnob = createSwitch(MainScroll, "Anti-VC Continuo")
-
-local function toggleAntiVC(state)
-    antiVCEnabled = state
-    AntiVCSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    AntiVCSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["AntiVC"] then QuickButtons["AntiVC"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
-
-    if state then
-        if antiVCConnection then antiVCConnection:Disconnect() end
-        antiVCConnection = Stealth.HideConnections(RunService.Stepped:Connect(function()
-            if not antiVCEnabled then return end
-            pcall(function()
-                if VoiceChatService then
-                    -- Fuerza el servicio activo en bucle para que el micro no se bloquee por completo
-                    if not VoiceChatService:IsVoiceEnabled() then
-                        VoiceChatService:JoinVoice()
-                    end
-                end
-            end)
-        end))
-    else
-        if antiVCConnection then antiVCConnection:Disconnect() end
-        antiVCConnection = nil
-    end
-end
-
-AntiVCSwitchBg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        toggleAntiVC(not antiVCEnabled)
-    end
-end)
-
 
 -- (Ventana de TP a Jugadores)
 local PlayerWindow = Instance.new("Frame")
@@ -447,7 +462,7 @@ local function spectatePlayer(targetPlayer)
         end
     else
         spectatingPlayer = targetPlayer
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
             Camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
         end
     end
@@ -1060,9 +1075,12 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
--- Botón rápido flotante para Anti-VC continuo (Con palomita/estado)
+-- Botón rápido flotante para Anti-VC por Acción Directa (Click)
 createQuickBtn("AntiVC", "AVC", UDim2.new(0, 60, 0, 190), function()
-    toggleAntiVC(not antiVCEnabled)
+    TriggerAntiVC()
+    if QuickButtons["AntiVC"] then
+        QuickButtons["AntiVC"].BackgroundColor3 = antiVCEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
+    end
 end, function() return antiVCEnabled end)
 
 if QuickButtons["AntiVC"] and quickButtonsMaster then
