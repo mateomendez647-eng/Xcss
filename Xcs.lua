@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
+local VoiceChatService = game:GetService("VoiceChatService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -101,7 +102,6 @@ local function loadPosition(name, defaultUDim2)
     return defaultUDim2
 end
 local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, tostring(state)) end
--- ✅ FORZAMOS A QUE EL BOTÓN RESTAURAR ESTÉ ENCENDIDO POR DEFECTO
 local function loadButtonState(btnName) 
     local defaultState = (btnName == "Restore") and "true" or "true"
     return loadData("BtnState_" .. btnName, defaultState) == "true" 
@@ -138,7 +138,6 @@ ScreenGui.IgnoreGuiInset = true
 local successParent = pcall(function() ScreenGui.Parent = CoreGui end)
 if not successParent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- ✅ INICIA MINIMIZADO (Visible = true para el botón flotante, false para el menú principal)
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 45, 0, 45)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0, 200))
@@ -167,11 +166,11 @@ Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
 
 local MainFrame = Instance.new("Frame")
 Stealth.HideInstance(MainFrame)
-MainFrame.Size = UDim2.new(0, 180, 0, 300)
+MainFrame.Size = UDim2.new(0, 180, 0, 320)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false -- ✅ INICIA OCULTO (MINIMIZADO)
+MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
@@ -245,7 +244,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 360)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -305,6 +304,47 @@ local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Ju
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
+
+-- 🎙️ Función de Anti-VC por Acción Directa (Reset de Micro)
+local function TriggerAntiVC()
+    pcall(function()
+        if VoiceChatService then
+            pcall(function() VoiceChatService:LeaveVoice() end)
+            pcall(function() VoiceChatService:PublishAudioOff() end)
+            task.wait(0.2)
+            pcall(function() VoiceChatService:JoinVoice() end)
+            pcall(function() VoiceChatService:PublishAudioOn() end)
+            pcall(function() VoiceChatService:EnableVoiceChat() end)
+        end
+    end)
+end
+
+-- Botón de Acción Anti-VC en el Menú Principal (Estilo Botón, sin palomita)
+local AntiVCBtnContainer = Instance.new("Frame")
+AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 24)
+AntiVCBtnContainer.BackgroundTransparency = 1
+AntiVCBtnContainer.Parent = MainScroll
+
+local AntiVCActionBtn = Instance.new("TextButton")
+AntiVCActionBtn.Size = UDim2.new(0.9, 0, 1, 0)
+AntiVCActionBtn.Position = UDim2.new(0.05, 0, 0, 0)
+AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+AntiVCActionBtn.Text = "🎙️ RESET MICRO (ANTI-VC)"
+AntiVCActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AntiVCActionBtn.Font = Enum.Font.GothamBold
+AntiVCActionBtn.TextSize = 9
+AntiVCActionBtn.Parent = AntiVCBtnContainer
+Instance.new("UICorner", AntiVCActionBtn).CornerRadius = UDim.new(0, 5)
+
+AntiVCActionBtn.MouseButton1Click:Connect(function()
+    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    AntiVCActionBtn.Text = "⚡ RECONECTANDO..."
+    TriggerAntiVC()
+    task.wait(0.5)
+    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    AntiVCActionBtn.Text = "🎙️ RESET MICRO (ANTI-VC)"
+end)
+
 
 -- (Ventana de TP a Jugadores)
 local PlayerWindow = Instance.new("Frame")
@@ -428,13 +468,11 @@ refreshPlayerList = function()
             local displayName = p.DisplayName
             local userName = p.Name
             
-            -- ✅ Verificación segura de Amigos
             local isFriend = false
             pcall(function()
                 isFriend = LocalPlayer:IsFriendsWith(p.UserId)
             end)
             
-            -- ✅ Agregamos el símbolo "⭐ " si es amigo
             local formattedName = (isFriend and "⭐ " or "") .. displayName
             
             if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
@@ -471,7 +509,7 @@ refreshPlayerList = function()
                 pNameLabel.Position = UDim2.new(0, 26, 0, 0)
                 pNameLabel.BackgroundTransparency = 1
                 pNameLabel.Text = formattedName
-                pNameLabel.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(220, 220, 220) -- Color dorado si es amigo
+                pNameLabel.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(220, 220, 220)
                 pNameLabel.Font = Enum.Font.Gotham
                 pNameLabel.TextSize = 8
                 pNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
@@ -986,7 +1024,9 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             if startTouchPos and not isDragging then
                 toggleFunc()
-                btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
+                if getState then
+                    btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
+                end
             end
             if isDragging then
                 local snapDistance = 35
@@ -1024,10 +1064,24 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
+-- Botón rápido flotante para Anti-VC (Acción Directa)
+createQuickBtn("AntiVC", "VC", UDim2.new(0, 60, 0, 190), function()
+    TriggerAntiVC()
+    if QuickButtons["AntiVC"] then
+        QuickButtons["AntiVC"].BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        task.wait(0.4)
+        QuickButtons["AntiVC"].BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    end
+end, nil)
+
+if QuickButtons["AntiVC"] and quickButtonsMaster then
+    QuickButtons["AntiVC"].Visible = true
+end
+
 -- ✅ CREACIÓN DEL BOTÓN RESTAURAR (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
-RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190)) 
+RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 100, 0, 190)) 
 RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 RestoreQuickBtn.BackgroundTransparency = 0.2
 RestoreQuickBtn.Text = "RST"
@@ -1091,7 +1145,8 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
         Quick_Fly = UDim2.new(0, 140, 0, 145),
         Quick_FreeCam = UDim2.new(0, 180, 0, 145),
         Quick_Fullbright = UDim2.new(0, 220, 0, 145),
-        Quick_Restore = UDim2.new(0, 60, 0, 190)
+        Quick_AntiVC = UDim2.new(0, 60, 0, 190),
+        Quick_Restore = UDim2.new(0, 100, 0, 190)
     }
 
     MainFrame.Position = defaultPositions.MainFrame
@@ -1110,6 +1165,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     if QuickButtons["Fly"] then QuickButtons["Fly"].Position = defaultPositions.Quick_Fly end
     if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = defaultPositions.Quick_FreeCam end
     if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = defaultPositions.Quick_Fullbright end
+    if QuickButtons["AntiVC"] then QuickButtons["AntiVC"].Position = defaultPositions.Quick_AntiVC end
     if QuickButtons["Restore"] then QuickButtons["Restore"].Position = defaultPositions.Quick_Restore end
 
     savePosition("MainFrame", defaultPositions.MainFrame)
@@ -1128,6 +1184,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     savePosition("Quick_Fly", defaultPositions.Quick_Fly)
     savePosition("Quick_FreeCam", defaultPositions.Quick_FreeCam)
     savePosition("Quick_Fullbright", defaultPositions.Quick_Fullbright)
+    savePosition("Quick_AntiVC", defaultPositions.Quick_AntiVC)
     savePosition("Quick_Restore", defaultPositions.Quick_Restore)
 
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
@@ -1283,8 +1340,15 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     quickButtonsMaster = not quickButtonsMaster
     MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     for name, btn in pairs(QuickButtons) do
-        if quickButtonsMaster then btn.Visible = (name == "TPS" and isTouchDevice) or loadButtonState(name)
-        else btn.Visible = false end
+        if quickButtonsMaster then 
+            if name == "AntiVC" then
+                btn.Visible = true
+            else
+                btn.Visible = (name == "TPS" and isTouchDevice) or loadButtonState(name)
+            end
+        else 
+            btn.Visible = false 
+        end
     end
     RestoreQuickBtn.Visible = quickButtonsMaster and loadButtonState("Restore")
 end)
@@ -1435,7 +1499,7 @@ end)
 UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
-    touchState.active = false
+        touchState.active = false
         if (os.clock() - touchState.startTime) < 0.3 and not touchState.isCameraDrag and not isOverGui(input.Position) then
             if deleteModeEnabled then DeletePartAt(input.Position)
             elseif tpEnabled then TeleportAt(input.Position) end
