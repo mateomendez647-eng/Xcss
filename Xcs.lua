@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa - Anti-Detección Básica)
+-- HUB: xcs (Versión Sigilosa con Infinite Jump)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -8,7 +8,6 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
-local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -19,15 +18,12 @@ local Stealth = {}
 function Stealth.HideConnections(connection)
     if not connection then return connection end
     pcall(function()
-        -- Intenta ocultar la conexión de posibles escaneos del cliente
         if setmetatable then
             local oldmt = getmetatable(connection)
             if oldmt then
                 setmetatable(connection, {
                     __index = function(t, k)
-                        if k == "Disconnect" then
-                            return function() end -- Bloquea intentos externos de desconectar
-                        end
+                        if k == "Disconnect" then return function() end end
                         return oldmt.__index[k]
                     end
                 })
@@ -39,9 +35,7 @@ end
 
 function Stealth.HideInstance(instance)
     if not instance then return end
-    pcall(function()
-        instance.Name = "CoreUI_" .. math.random(1000, 9999)
-    end)
+    pcall(function() instance.Name = "CoreUI_" .. math.random(1000, 9999) end)
 end
 
 -- Variables de estado
@@ -54,6 +48,7 @@ local freeCamEnabled = false
 local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
+local infJumpEnabled = false -- ✅ NUEVO ESTADO
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -128,6 +123,7 @@ local keybinds = {
     Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
     Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
     ESP        = loadKeybind("ESP",        Enum.KeyCode.H),
+    InfJump    = loadKeybind("InfJump",    Enum.KeyCode.J), -- ✅ NUEVO KEYBIND
 }
 
 -- 🛡️ INTERFAZ PROTEGIDA
@@ -135,11 +131,9 @@ local ScreenGui = Instance.new("ScreenGui")
 Stealth.HideInstance(ScreenGui)
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
--- Intentar ponerlo en CoreGui para que no se vea en el explorador de instancias
 local successParent = pcall(function() ScreenGui.Parent = CoreGui end)
 if not successParent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- (El resto del diseño visual de la UI sigue igual, aplicando Stealth.HideInstance a los frames principales)
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 45, 0, 45)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0, 200))
@@ -187,7 +181,6 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
--- Botones de la barra superior (Reciclando tu código)
 local ResetPositionsBtn = Instance.new("TextButton")
 ResetPositionsBtn.Size = UDim2.new(0, 18, 0, 18)
 ResetPositionsBtn.Position = UDim2.new(1, -114, 0, 3)
@@ -247,7 +240,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 330)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 360) -- Aumentado por el nuevo switch
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -303,11 +296,12 @@ local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
 local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
 local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
+local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Jump") -- ✅ NUEVO SWITCH
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
--- (Ventana de TP a Jugadores se mantiene igual)
+-- (Ventana de TP a Jugadores)
 local PlayerWindow = Instance.new("Frame")
 PlayerWindow.Size = UDim2.new(0, 180, 0, 300)
 PlayerWindow.Position = loadPosition("PlayerWindow", UDim2.new(0, 300, 0, 100))
@@ -444,7 +438,6 @@ refreshPlayerList = function()
                 thumbImg.Parent = row
                 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
-                -- ✅ SISTEMA DE CARGA ESTILO NEVOLINE / AK ADMIN
                 task.spawn(function()
                     local userId = p.UserId
                     local finalUrl = ""
@@ -456,9 +449,7 @@ refreshPlayerList = function()
                     else
                         finalUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=150&height=150&format=png"
                     end
-                    if thumbImg and thumbImg.Parent then
-                        thumbImg.Image = finalUrl
-                    end
+                    if thumbImg and thumbImg.Parent then thumbImg.Image = finalUrl end
                 end)
 
                 local pNameLabel = Instance.new("TextLabel")
@@ -626,6 +617,26 @@ local function toggleNoclip(state)
     end
 end
 
+-- ✅ NUEVA LÓGICA DE INFINITE JUMP
+local function toggleInfJump(state)
+    infJumpEnabled = state
+    InfJumpSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    InfJumpSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if QuickButtons["InfJump"] then QuickButtons["InfJump"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+end
+
+UserInputService.JumpRequest:Connect(function()
+    if infJumpEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end
+end)
+
 local function toggleDeleteMode(state)
     deleteModeEnabled = state
     DeleteSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -766,13 +777,13 @@ local function toggleFly(state)
         if not hrp then return end
 
         flyBodyVelocity = Instance.new("BodyVelocity")
-        flyBodyVelocity.Name = "CoreUI_BV" -- 🛡️ Nombre falso
+        flyBodyVelocity.Name = "CoreUI_BV"
         flyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
         flyBodyVelocity.Velocity = Vector3.zero
         flyBodyVelocity.Parent = hrp
 
         flyBodyGyro = Instance.new("BodyGyro")
-        flyBodyGyro.Name = "CoreUI_BG" -- 🛡️ Nombre falso
+        flyBodyGyro.Name = "CoreUI_BG"
         flyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
         flyBodyGyro.P = 1000
         flyBodyGyro.D = 50
@@ -890,7 +901,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     if espEnabled then toggleESP(true) end
 end)
 
--- Arrastre de ventanas (con protección de instancia)
+-- Arrastre de ventanas
 local function makeDraggable(frame, saveName)
     local dragging, dragInput, dragStart, startPos
     frame.InputBegan:Connect(function(input)
@@ -995,9 +1006,11 @@ createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXR
 createQuickBtn("ESP", "ESP", UDim2.new(0, 180, 0, 100), function() toggleESP(not espEnabled) end, function() return espEnabled end)
 createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 220, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end)
 createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0, 145), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
-createQuickBtn("Fly", "FLY", UDim2.new(0, 100, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
-createQuickBtn("FreeCam", "CAM", UDim2.new(0, 140, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
-createQuickBtn("Fullbright", "LGT", UDim2.new(0, 180, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
+-- ✅ NUEVO BOTÓN FLOTANTE INFINITE JUMP
+createQuickBtn("InfJump", "JMP", UDim2.new(0, 100, 0, 145), function() toggleInfJump(not infJumpEnabled) end, function() return infJumpEnabled end)
+createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
+createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
+createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
@@ -1044,7 +1057,7 @@ RestoreQuickBtn.InputEnded:Connect(function(input)
     end
 end)
 
--- (El resto de configuraciones y keybinds se mantienen intactos)
+-- Configuraciones
 local function createQuickConfig(text, btnName)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, 0, 0, 20)
@@ -1148,6 +1161,7 @@ createQuickConfig("FP X-Ray", "FPXRay")
 createQuickConfig("ESP", "ESP")
 createQuickConfig("Borrador", "DeleteMode")
 createQuickConfig("Noclip", "Noclip")
+createQuickConfig("Infinite Jump", "InfJump") -- ✅ CONFIGURACIÓN INFJUMP
 createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
 createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 createQuickConfig("Fullbright", "Fullbright")
@@ -1183,6 +1197,8 @@ FPXRaySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum
 ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
 DeleteSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleDeleteMode(not deleteModeEnabled) end end)
 NoclipSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end end)
+-- ✅ SWITCH PRINCIPAL INFJUMP
+InfJumpSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInfJump(not infJumpEnabled) end end)
 FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFly(not flyEnabled) end end)
 FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFreeCam(not freeCamEnabled) end end)
 FullbrightSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end end)
@@ -1258,6 +1274,7 @@ createKeybindBox("Tecla Free Cam", "FreeCam")
 createKeybindBox("Tecla Fullbright", "Fullbright")
 createKeybindBox("Tecla X-Ray", "XRay")
 createKeybindBox("Tecla ESP", "ESP")
+createKeybindBox("Tecla Inf Jump", "InfJump") -- ✅ KEYBIND INFJUMP
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
@@ -1309,6 +1326,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
         if input.KeyCode == keybinds.ESP then toggleESP(not espEnabled) end
+        if input.KeyCode == keybinds.InfJump then toggleInfJump(not infJumpEnabled) end -- ✅ TECLA INFJUMP
         if input.KeyCode == keybinds.Restore then RestoreMap() end
         if input.KeyCode == keybinds.Teleport then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
         if input.KeyCode == keybinds.Delete then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
