@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa - Anti-VC Directo AK/Novoline)
+-- HUB: xcs (Versión Sigilosa - Anti-VC Estilo AK Admin / Novoline)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -50,7 +50,7 @@ local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
-local antiVCEnabled = false -- 🎙️ Estado interno del Anti-VC Directo
+local antiVCActive = false
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -296,30 +296,45 @@ MainPadding.Parent = MainScroll
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
 if not isTouchDevice then TPSwitchContainer.Visible = false end
 
--- 🎙️ Función de Anti-VC Directo (Estilo AK Admin / Novoline)
+-- 🎙️ Función exacta de Anti-VC (Simulando el comportamiento del video del AK Admin)
 local function TriggerAntiVC()
-    antiVCEnabled = not antiVCEnabled
+    if antiVCActive then return end
+    antiVCActive = true
+    
     pcall(function()
-        if antiVCEnabled then
-            -- Intercepta el baneo de micro por metatabla de forma instantánea al tocar
-            if hookmetamethod and getnamecallmethod then
-                local oldNamecall
-                oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                    local method = getnamecallmethod()
-                    if antiVCEnabled and self == VoiceChatService and (method == "LeaveVoice" or method == "PublishAudioOff") then
-                        return nil -- Bloquea la orden de baneo del servidor
-                    end
-                    return oldNamecall(self, ...)
-                end))
-            end
-            if VoiceChatService then
-                VoiceChatService:EnableVoiceChat()
-            end
+        -- 1. Simula el corte/desconexión limpia del chat de voz (como en el video)
+        if VoiceChatService then
+            pcall(function() VoiceChatService:LeaveVoice() end)
+            pcall(function() VoiceChatService:PublishAudioOff() end)
         end
     end)
+    
+    task.wait(0.6)
+    
+    pcall(function()
+        -- 2. Aplica el hook para bloquear el baneo temporal y vuelve a encender el micro de inmediato
+        if hookmetamethod and getnamecallmethod then
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                if self == VoiceChatService and (method == "LeaveVoice" or method == "PublishAudioOff") then
+                    return nil
+                end
+                return oldNamecall(self, ...)
+            end))
+        end
+        if VoiceChatService then
+            pcall(function() VoiceChatService:JoinVoice() end)
+            pcall(function() VoiceChatService:PublishAudioOn() end)
+            pcall(function() VoiceChatService:EnableVoiceChat() end)
+        end
+    end)
+    
+    task.wait(0.5)
+    antiVCActive = false
 end
 
--- Botón de Acción Directa Anti-VC colocado arriba en el Menú Principal
+-- Botón de Acción Directa Anti-VC arriba en el menú principal
 local AntiVCBtnContainer = Instance.new("Frame")
 AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 26)
 AntiVCBtnContainer.BackgroundTransparency = 1
@@ -328,8 +343,8 @@ AntiVCBtnContainer.Parent = MainScroll
 local AntiVCActionBtn = Instance.new("TextButton")
 AntiVCActionBtn.Size = UDim2.new(0.9, 0, 1, 0)
 AntiVCActionBtn.Position = UDim2.new(0.05, 0, 0, 0)
-AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (CLICK)"
+AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (ACTIVAR)"
 AntiVCActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AntiVCActionBtn.Font = Enum.Font.GothamBold
 AntiVCActionBtn.TextSize = 9
@@ -337,14 +352,14 @@ AntiVCActionBtn.Parent = AntiVCBtnContainer
 Instance.new("UICorner", AntiVCActionBtn).CornerRadius = UDim.new(0, 5)
 
 AntiVCActionBtn.MouseButton1Click:Connect(function()
+    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
+    AntiVCActionBtn.Text = "⚡ RECONECTANDO..."
     TriggerAntiVC()
-    if antiVCEnabled then
-        AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-        AntiVCActionBtn.Text = "✅ ANTI-VC ACTIVADO"
-    else
-        AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (CLICK)"
-    end
+    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    AntiVCActionBtn.Text = "🛡️ PROTEGIDO CONTRA BAN"
+    task.wait(2)
+    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (ACTIVAR)"
 end)
 
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
@@ -462,7 +477,7 @@ local function spectatePlayer(targetPlayer)
         end
     else
         spectatingPlayer = targetPlayer
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
             Camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
         end
     end
@@ -1075,13 +1090,10 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
--- Botón rápido flotante para Anti-VC por Acción Directa (Click)
+-- Botón rápido flotante para Anti-VC por Acción Directa
 createQuickBtn("AntiVC", "AVC", UDim2.new(0, 60, 0, 190), function()
     TriggerAntiVC()
-    if QuickButtons["AntiVC"] then
-        QuickButtons["AntiVC"].BackgroundColor3 = antiVCEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
-    end
-end, function() return antiVCEnabled end)
+end, nil)
 
 if QuickButtons["AntiVC"] and quickButtonsMaster then
     QuickButtons["AntiVC"].Visible = true
@@ -1493,7 +1505,7 @@ local touchState = { active = false, startTime = 0, totalMoved = 0, isCameraDrag
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
-        touchState.active = true; touchState.startTime = os.clock(); touchState.totalMoved = 0; touchState.isCameraDrag = false
+        touchState.active = true; touchState.startTime = os.clock(); touchState.totalMoved =0; touchState.isCameraDrag = false
     end
 end)
 
