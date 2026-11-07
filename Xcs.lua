@@ -1055,50 +1055,62 @@ RestoreQuickBtn.InputEnded:Connect(function(input)
     end
 end)
 
--- ✅ BOTÓN DE RESET TOTAL (AHORA BORRA TODOS LOS ARCHIVOS DE GUARDADO)
+-- ✅ BOTÓN DE RESET TOTAL (SOBRESCRIBE EL GUARDADO, FUNCIONA EN ANDROID)
 ResetPositionsBtn.MouseButton1Click:Connect(function()
-    pcall(function()
-        if delfile then
-            -- Borra posiciones de ventanas
-            delfile("xcs_MainFrame.txt")
-            delfile("xcs_MiniBtn.txt")
-            delfile("xcs_MiniTpBtn.txt")
-            delfile("xcs_SettingsFrame.txt")
-            delfile("xcs_PlayerWindow.txt")
-            
-            -- Borra posiciones de TODOS los botones rápidos de Android
-            delfile("xcs_Quick_TPS.txt")
-            delfile("xcs_Quick_Invisicam.txt")
-            delfile("xcs_Quick_FPXRay.txt")
-            delfile("xcs_Quick_ESP.txt")
-            delfile("xcs_Quick_DeleteMode.txt")
-            delfile("xcs_Quick_Noclip.txt")
-            delfile("xcs_Quick_InfJump.txt") -- ✅ FALTABA ESTE
-            delfile("xcs_Quick_Fly.txt")
-            delfile("xcs_Quick_FreeCam.txt")
-            delfile("xcs_Quick_Fullbright.txt")
-            delfile("xcs_Quick_Restore.txt") -- ✅ FALTABA ESTE
-        end
-    end)
+    local defaultPositions = {
+        MainFrame = UDim2.new(0, 100, 0, 100),
+        MiniBtn = UDim2.new(0, 15, 0, 200),
+        MiniTpBtn = UDim2.new(0, 70, 0, 200),
+        SettingsFrame = UDim2.new(0, 120, 0, 120),
+        PlayerWindow = UDim2.new(0, 300, 0, 100),
+        Quick_TPS = UDim2.new(0, 60, 0, 100),
+        Quick_Invisicam = UDim2.new(0, 100, 0, 100),
+        Quick_FPXRay = UDim2.new(0, 140, 0, 100),
+        Quick_ESP = UDim2.new(0, 180, 0, 100),
+        Quick_DeleteMode = UDim2.new(0, 220, 0, 100),
+        Quick_Noclip = UDim2.new(0, 60, 0, 145),
+        Quick_InfJump = UDim2.new(0, 100, 0, 145),
+        Quick_Fly = UDim2.new(0, 140, 0, 145),
+        Quick_FreeCam = UDim2.new(0, 180, 0, 145),
+        Quick_Fullbright = UDim2.new(0, 220, 0, 145),
+        Quick_Restore = UDim2.new(0, 60, 0, 190)
+    }
 
-    -- Devuelve todo a su posición original en pantalla
-    MainFrame.Position = UDim2.new(0, 100, 0, 100)
-    MiniBtn.Position = UDim2.new(0, 15, 0, 200)
-    MiniTpBtn.Position = UDim2.new(0, 70, 0, 200)
-    SettingsFrame.Position = UDim2.new(0, 120, 0, 120)
-    PlayerWindow.Position = UDim2.new(0, 300, 0, 100)
+    MainFrame.Position = defaultPositions.MainFrame
+    MiniBtn.Position = defaultPositions.MiniBtn
+    MiniTpBtn.Position = defaultPositions.MiniTpBtn
+    SettingsFrame.Position = defaultPositions.SettingsFrame
+    PlayerWindow.Position = defaultPositions.PlayerWindow
 
-    if QuickButtons["TPS"] then QuickButtons["TPS"].Position = UDim2.new(0, 60, 0, 100) end
-    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = UDim2.new(0, 100, 0, 100) end
-    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].Position = UDim2.new(0, 140, 0, 100) end
-    if QuickButtons["ESP"] then QuickButtons["ESP"].Position = UDim2.new(0, 180, 0, 100) end
-    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = UDim2.new(0, 220, 0, 100) end
-    if QuickButtons["Noclip"] then QuickButtons["Noclip"].Position = UDim2.new(0, 60, 0, 145) end
-    if QuickButtons["InfJump"] then QuickButtons["InfJump"].Position = UDim2.new(0, 100, 0, 145) end
-    if QuickButtons["Fly"] then QuickButtons["Fly"].Position = UDim2.new(0, 140, 0, 145) end
-    if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = UDim2.new(0, 180, 0, 145) end
-    if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = UDim2.new(0, 220, 0, 145) end
-    if QuickButtons["Restore"] then QuickButtons["Restore"].Position = UDim2.new(0, 60, 0, 190) end
+    if QuickButtons["TPS"] then QuickButtons["TPS"].Position = defaultPositions.Quick_TPS end
+    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = defaultPositions.Quick_Invisicam end
+    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].Position = defaultPositions.Quick_FPXRay end
+    if QuickButtons["ESP"] then QuickButtons["ESP"].Position = defaultPositions.Quick_ESP end
+    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = defaultPositions.Quick_DeleteMode end
+    if QuickButtons["Noclip"] then QuickButtons["Noclip"].Position = defaultPositions.Quick_Noclip end
+    if QuickButtons["InfJump"] then QuickButtons["InfJump"].Position = defaultPositions.Quick_InfJump end
+    if QuickButtons["Fly"] then QuickButtons["Fly"].Position = defaultPositions.Quick_Fly end
+    if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = defaultPositions.Quick_FreeCam end
+    if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = defaultPositions.Quick_Fullbright end
+    if QuickButtons["Restore"] then QuickButtons["Restore"].Position = defaultPositions.Quick_Restore end
+
+    savePosition("MainFrame", defaultPositions.MainFrame)
+    savePosition("MiniBtn", defaultPositions.MiniBtn)
+    savePosition("MiniTpBtn", defaultPositions.MiniTpBtn)
+    savePosition("SettingsFrame", defaultPositions.SettingsFrame)
+    savePosition("PlayerWindow", defaultPositions.PlayerWindow)
+    
+    savePosition("Quick_TPS", defaultPositions.Quick_TPS)
+    savePosition("Quick_Invisicam", defaultPositions.Quick_Invisicam)
+    savePosition("Quick_FPXRay", defaultPositions.Quick_FPXRay)
+    savePosition("Quick_ESP", defaultPositions.Quick_ESP)
+    savePosition("Quick_DeleteMode", defaultPositions.Quick_DeleteMode)
+    savePosition("Quick_Noclip", defaultPositions.Quick_Noclip)
+    savePosition("Quick_InfJump", defaultPositions.Quick_InfJump)
+    savePosition("Quick_Fly", defaultPositions.Quick_Fly)
+    savePosition("Quick_FreeCam", defaultPositions.Quick_FreeCam)
+    savePosition("Quick_Fullbright", defaultPositions.Quick_Fullbright)
+    savePosition("Quick_Restore", defaultPositions.Quick_Restore)
 
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     task.wait(0.3)
