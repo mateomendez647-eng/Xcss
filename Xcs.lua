@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa - Anti-VC Estilo AK Admin / Novoline)
+-- HUB: xcs (Versión Limpia sin Anti-VC)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -8,7 +8,6 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
-local VoiceChatService = game:GetService("VoiceChatService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -50,7 +49,6 @@ local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
-local antiVCActive = false
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -167,7 +165,7 @@ Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
 
 local MainFrame = Instance.new("Frame")
 Stealth.HideInstance(MainFrame)
-MainFrame.Size = UDim2.new(0, 180, 0, 340)
+MainFrame.Size = UDim2.new(0, 180, 0, 315)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
@@ -245,7 +243,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 460)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -295,72 +293,6 @@ MainPadding.Parent = MainScroll
 
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
 if not isTouchDevice then TPSwitchContainer.Visible = false end
-
--- 🎙️ Función exacta de Anti-VC (Simulando el comportamiento del video del AK Admin)
-local function TriggerAntiVC()
-    if antiVCActive then return end
-    antiVCActive = true
-    
-    pcall(function()
-        -- 1. Simula el corte/desconexión limpia del chat de voz (como en el video)
-        if VoiceChatService then
-            pcall(function() VoiceChatService:LeaveVoice() end)
-            pcall(function() VoiceChatService:PublishAudioOff() end)
-        end
-    end)
-    
-    task.wait(0.6)
-    
-    pcall(function()
-        -- 2. Aplica el hook para bloquear el baneo temporal y vuelve a encender el micro de inmediato
-        if hookmetamethod and getnamecallmethod then
-            local oldNamecall
-            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if self == VoiceChatService and (method == "LeaveVoice" or method == "PublishAudioOff") then
-                    return nil
-                end
-                return oldNamecall(self, ...)
-            end))
-        end
-        if VoiceChatService then
-            pcall(function() VoiceChatService:JoinVoice() end)
-            pcall(function() VoiceChatService:PublishAudioOn() end)
-            pcall(function() VoiceChatService:EnableVoiceChat() end)
-        end
-    end)
-    
-    task.wait(0.5)
-    antiVCActive = false
-end
-
--- Botón de Acción Directa Anti-VC arriba en el menú principal
-local AntiVCBtnContainer = Instance.new("Frame")
-AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 26)
-AntiVCBtnContainer.BackgroundTransparency = 1
-AntiVCBtnContainer.Parent = MainScroll
-
-local AntiVCActionBtn = Instance.new("TextButton")
-AntiVCActionBtn.Size = UDim2.new(0.9, 0, 1, 0)
-AntiVCActionBtn.Position = UDim2.new(0.05, 0, 0, 0)
-AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (ACTIVAR)"
-AntiVCActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AntiVCActionBtn.Font = Enum.Font.GothamBold
-AntiVCActionBtn.TextSize = 9
-AntiVCActionBtn.Parent = AntiVCBtnContainer
-Instance.new("UICorner", AntiVCActionBtn).CornerRadius = UDim.new(0, 5)
-
-AntiVCActionBtn.MouseButton1Click:Connect(function()
-    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
-    AntiVCActionBtn.Text = "⚡ RECONECTANDO..."
-    TriggerAntiVC()
-    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    AntiVCActionBtn.Text = "🛡️ PROTEGIDO CONTRA BAN"
-    task.wait(2)
-    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-    AntiVCActionBtn.Text = "🎙️ ANTI-VC BAN (ACTIVAR)"
-end)
 
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
@@ -477,8 +409,8 @@ local function spectatePlayer(targetPlayer)
         end
     else
         spectatingPlayer = targetPlayer
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
-            Camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
+            Camera.CameraSubject = targetPlayer.Character:FindFirstChild("Humanoid")
         end
     end
 end
@@ -1090,19 +1022,10 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
--- Botón rápido flotante para Anti-VC por Acción Directa
-createQuickBtn("AntiVC", "AVC", UDim2.new(0, 60, 0, 190), function()
-    TriggerAntiVC()
-end, nil)
-
-if QuickButtons["AntiVC"] and quickButtonsMaster then
-    QuickButtons["AntiVC"].Visible = true
-end
-
 -- ✅ CREACIÓN DEL BOTÓN RESTAURAR (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
-RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 100, 0, 190)) 
+RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190)) 
 RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 RestoreQuickBtn.BackgroundTransparency = 0.2
 RestoreQuickBtn.Text = "RST"
@@ -1166,8 +1089,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
         Quick_Fly = UDim2.new(0, 140, 0, 145),
         Quick_FreeCam = UDim2.new(0, 180, 0, 145),
         Quick_Fullbright = UDim2.new(0, 220, 0, 145),
-        Quick_AntiVC = UDim2.new(0, 60, 0, 190),
-        Quick_Restore = UDim2.new(0, 100, 0, 190)
+        Quick_Restore = UDim2.new(0, 60, 0, 190)
     }
 
     MainFrame.Position = defaultPositions.MainFrame
@@ -1186,7 +1108,6 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     if QuickButtons["Fly"] then QuickButtons["Fly"].Position = defaultPositions.Quick_Fly end
     if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = defaultPositions.Quick_FreeCam end
     if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = defaultPositions.Quick_Fullbright end
-    if QuickButtons["AntiVC"] then QuickButtons["AntiVC"].Position = defaultPositions.Quick_AntiVC end
     if QuickButtons["Restore"] then QuickButtons["Restore"].Position = defaultPositions.Quick_Restore end
 
     savePosition("MainFrame", defaultPositions.MainFrame)
@@ -1205,7 +1126,6 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     savePosition("Quick_Fly", defaultPositions.Quick_Fly)
     savePosition("Quick_FreeCam", defaultPositions.Quick_FreeCam)
     savePosition("Quick_Fullbright", defaultPositions.Quick_Fullbright)
-    savePosition("Quick_AntiVC", defaultPositions.Quick_AntiVC)
     savePosition("Quick_Restore", defaultPositions.Quick_Restore)
 
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
@@ -1362,11 +1282,7 @@ MasterQuickBtn.MouseButton1Click:Connect(function()
     MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
     for name, btn in pairs(QuickButtons) do
         if quickButtonsMaster then 
-            if name == "AntiVC" then
-                btn.Visible = true
-            else
-                btn.Visible = (name == "TPS" and isTouchDevice) or loadButtonState(name)
-            end
+            btn.Visible = (name == "TPS" and isTouchDevice) or loadButtonState(name)
         else 
             btn.Visible = false 
         end
@@ -1505,7 +1421,7 @@ local touchState = { active = false, startTime = 0, totalMoved = 0, isCameraDrag
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch then
-        touchState.active = true; touchState.startTime = os.clock(); touchState.totalMoved =0; touchState.isCameraDrag = false
+        touchState.active = true; touchState.startTime = os.clock(); touchState.totalMoved = 0; touchState.isCameraDrag = false
     end
 end)
 
