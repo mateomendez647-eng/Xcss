@@ -244,7 +244,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 420)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -295,16 +295,6 @@ MainPadding.Parent = MainScroll
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
 if not isTouchDevice then TPSwitchContainer.Visible = false end
 
-local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
-local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
-local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
-local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
-local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
-local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Jump")
-local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
-local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
-local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
-
 -- 🎙️ Función de Anti-VC por Acción Directa (Reset de Micro)
 local function TriggerAntiVC()
     pcall(function()
@@ -319,9 +309,9 @@ local function TriggerAntiVC()
     end)
 end
 
--- Botón de Acción Anti-VC en el Menú Principal (Estilo Botón, sin palomita)
+-- Botón de Acción Anti-VC colocado arriba en el Menú Principal
 local AntiVCBtnContainer = Instance.new("Frame")
-AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 24)
+AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 26)
 AntiVCBtnContainer.BackgroundTransparency = 1
 AntiVCBtnContainer.Parent = MainScroll
 
@@ -345,6 +335,15 @@ AntiVCActionBtn.MouseButton1Click:Connect(function()
     AntiVCActionBtn.Text = "🎙️ RESET MICRO (ANTI-VC)"
 end)
 
+local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
+local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
+local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
+local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
+local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
+local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Jump")
+local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
+local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
+local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
 
 -- (Ventana de TP a Jugadores)
 local PlayerWindow = Instance.new("Frame")
