@@ -138,6 +138,7 @@ ScreenGui.IgnoreGuiInset = true
 local successParent = pcall(function() ScreenGui.Parent = CoreGui end)
 if not successParent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
+-- ✅ INICIA MINIMIZADO (Visible = true para el botón flotante, false para el menú principal)
 local MiniBtn = Instance.new("TextButton")
 MiniBtn.Size = UDim2.new(0, 45, 0, 45)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0, 200))
@@ -146,7 +147,7 @@ MiniBtn.Text = "xcs"
 MiniBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 MiniBtn.TextSize = 12
 MiniBtn.Font = Enum.Font.GothamBold
-MiniBtn.Visible = false
+MiniBtn.Visible = true 
 MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
@@ -170,7 +171,7 @@ MainFrame.Size = UDim2.new(0, 180, 0, 300)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
-MainFrame.Visible = true
+MainFrame.Visible = false -- ✅ INICIA OCULTO (MINIMIZADO)
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
@@ -427,6 +428,15 @@ refreshPlayerList = function()
             local displayName = p.DisplayName
             local userName = p.Name
             
+            -- ✅ Verificación segura de Amigos
+            local isFriend = false
+            pcall(function()
+                isFriend = LocalPlayer:IsFriendsWith(p.UserId)
+            end)
+            
+            -- ✅ Agregamos el símbolo "⭐ " si es amigo
+            local formattedName = (isFriend and "⭐ " or "") .. displayName
+            
             if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
                 local row = Instance.new("Frame")
                 row.Size = UDim2.new(1, -10, 0, 26)
@@ -460,8 +470,8 @@ refreshPlayerList = function()
                 pNameLabel.Size = UDim2.new(0.42, 0, 1, 0)
                 pNameLabel.Position = UDim2.new(0, 26, 0, 0)
                 pNameLabel.BackgroundTransparency = 1
-                pNameLabel.Text = displayName
-                pNameLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+                pNameLabel.Text = formattedName
+                pNameLabel.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(220, 220, 220) -- Color dorado si es amigo
                 pNameLabel.Font = Enum.Font.Gotham
                 pNameLabel.TextSize = 8
                 pNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
@@ -1029,7 +1039,6 @@ RestoreQuickBtn.Parent = ScreenGui
 Instance.new("UICorner", RestoreQuickBtn).CornerRadius = UDim.new(1, 0)
 QuickButtons["Restore"] = RestoreQuickBtn
 
--- ✅ FORZAMOS SU APARICIÓN AQUÍ MISMO (Ya que el botón existe)
 if loadButtonState("Restore") and quickButtonsMaster then
     RestoreQuickBtn.Visible = true
 end
@@ -1065,7 +1074,6 @@ RestoreQuickBtn.InputEnded:Connect(function(input)
     end
 end)
 
--- ✅ BOTÓN DE RESET TOTAL (SOBRESCRIBE EL GUARDADO, FUNCIONA EN ANDROID)
 ResetPositionsBtn.MouseButton1Click:Connect(function()
     local defaultPositions = {
         MainFrame = UDim2.new(0, 100, 0, 100),
@@ -1427,7 +1435,7 @@ end)
 UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
-        touchState.active = false
+    touchState.active = false
         if (os.clock() - touchState.startTime) < 0.3 and not touchState.isCameraDrag and not isOverGui(input.Position) then
             if deleteModeEnabled then DeletePartAt(input.Position)
             elseif tpEnabled then TeleportAt(input.Position) end
