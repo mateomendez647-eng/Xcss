@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa con Infinite Jump)
+-- HUB: xcs (Versión Sigilosa con Infinite Jump y Reset Arreglado)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -48,7 +48,7 @@ local freeCamEnabled = false
 local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
-local infJumpEnabled = false -- ✅ NUEVO ESTADO
+local infJumpEnabled = false
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -123,7 +123,7 @@ local keybinds = {
     Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
     Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
     ESP        = loadKeybind("ESP",        Enum.KeyCode.H),
-    InfJump    = loadKeybind("InfJump",    Enum.KeyCode.J), -- ✅ NUEVO KEYBIND
+    InfJump    = loadKeybind("InfJump",    Enum.KeyCode.J),
 }
 
 -- 🛡️ INTERFAZ PROTEGIDA
@@ -240,7 +240,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 360) -- Aumentado por el nuevo switch
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 360)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -296,7 +296,7 @@ local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
 local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
 local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
-local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Jump") -- ✅ NUEVO SWITCH
+local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Jump")
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
@@ -617,7 +617,6 @@ local function toggleNoclip(state)
     end
 end
 
--- ✅ NUEVA LÓGICA DE INFINITE JUMP
 local function toggleInfJump(state)
     infJumpEnabled = state
     InfJumpSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -1006,7 +1005,6 @@ createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXR
 createQuickBtn("ESP", "ESP", UDim2.new(0, 180, 0, 100), function() toggleESP(not espEnabled) end, function() return espEnabled end)
 createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 220, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end, function() return deleteModeEnabled end)
 createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0, 145), function() toggleNoclip(not noclipEnabled) end, function() return noclipEnabled end)
--- ✅ NUEVO BOTÓN FLOTANTE INFINITE JUMP
 createQuickBtn("InfJump", "JMP", UDim2.new(0, 100, 0, 145), function() toggleInfJump(not infJumpEnabled) end, function() return infJumpEnabled end)
 createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
@@ -1055,6 +1053,56 @@ RestoreQuickBtn.InputEnded:Connect(function(input)
         if rIsDragging then savePosition("Quick_Restore", RestoreQuickBtn.Position) end
         rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos = nil, false, nil, nil
     end
+end)
+
+-- ✅ BOTÓN DE RESET TOTAL (AHORA BORRA TODOS LOS ARCHIVOS DE GUARDADO)
+ResetPositionsBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        if delfile then
+            -- Borra posiciones de ventanas
+            delfile("xcs_MainFrame.txt")
+            delfile("xcs_MiniBtn.txt")
+            delfile("xcs_MiniTpBtn.txt")
+            delfile("xcs_SettingsFrame.txt")
+            delfile("xcs_PlayerWindow.txt")
+            
+            -- Borra posiciones de TODOS los botones rápidos de Android
+            delfile("xcs_Quick_TPS.txt")
+            delfile("xcs_Quick_Invisicam.txt")
+            delfile("xcs_Quick_FPXRay.txt")
+            delfile("xcs_Quick_ESP.txt")
+            delfile("xcs_Quick_DeleteMode.txt")
+            delfile("xcs_Quick_Noclip.txt")
+            delfile("xcs_Quick_InfJump.txt") -- ✅ FALTABA ESTE
+            delfile("xcs_Quick_Fly.txt")
+            delfile("xcs_Quick_FreeCam.txt")
+            delfile("xcs_Quick_Fullbright.txt")
+            delfile("xcs_Quick_Restore.txt") -- ✅ FALTABA ESTE
+        end
+    end)
+
+    -- Devuelve todo a su posición original en pantalla
+    MainFrame.Position = UDim2.new(0, 100, 0, 100)
+    MiniBtn.Position = UDim2.new(0, 15, 0, 200)
+    MiniTpBtn.Position = UDim2.new(0, 70, 0, 200)
+    SettingsFrame.Position = UDim2.new(0, 120, 0, 120)
+    PlayerWindow.Position = UDim2.new(0, 300, 0, 100)
+
+    if QuickButtons["TPS"] then QuickButtons["TPS"].Position = UDim2.new(0, 60, 0, 100) end
+    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = UDim2.new(0, 100, 0, 100) end
+    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].Position = UDim2.new(0, 140, 0, 100) end
+    if QuickButtons["ESP"] then QuickButtons["ESP"].Position = UDim2.new(0, 180, 0, 100) end
+    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = UDim2.new(0, 220, 0, 100) end
+    if QuickButtons["Noclip"] then QuickButtons["Noclip"].Position = UDim2.new(0, 60, 0, 145) end
+    if QuickButtons["InfJump"] then QuickButtons["InfJump"].Position = UDim2.new(0, 100, 0, 145) end
+    if QuickButtons["Fly"] then QuickButtons["Fly"].Position = UDim2.new(0, 140, 0, 145) end
+    if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = UDim2.new(0, 180, 0, 145) end
+    if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = UDim2.new(0, 220, 0, 145) end
+    if QuickButtons["Restore"] then QuickButtons["Restore"].Position = UDim2.new(0, 60, 0, 190) end
+
+    ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    task.wait(0.3)
+    ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 end)
 
 -- Configuraciones
@@ -1161,7 +1209,7 @@ createQuickConfig("FP X-Ray", "FPXRay")
 createQuickConfig("ESP", "ESP")
 createQuickConfig("Borrador", "DeleteMode")
 createQuickConfig("Noclip", "Noclip")
-createQuickConfig("Infinite Jump", "InfJump") -- ✅ CONFIGURACIÓN INFJUMP
+createQuickConfig("Infinite Jump", "InfJump")
 createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
 createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 createQuickConfig("Fullbright", "Fullbright")
@@ -1197,7 +1245,6 @@ FPXRaySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum
 ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
 DeleteSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleDeleteMode(not deleteModeEnabled) end end)
 NoclipSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end end)
--- ✅ SWITCH PRINCIPAL INFJUMP
 InfJumpSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInfJump(not infJumpEnabled) end end)
 FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFly(not flyEnabled) end end)
 FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFreeCam(not freeCamEnabled) end end)
@@ -1274,7 +1321,7 @@ createKeybindBox("Tecla Free Cam", "FreeCam")
 createKeybindBox("Tecla Fullbright", "Fullbright")
 createKeybindBox("Tecla X-Ray", "XRay")
 createKeybindBox("Tecla ESP", "ESP")
-createKeybindBox("Tecla Inf Jump", "InfJump") -- ✅ KEYBIND INFJUMP
+createKeybindBox("Tecla Inf Jump", "InfJump")
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
@@ -1326,7 +1373,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
         if input.KeyCode == keybinds.ESP then toggleESP(not espEnabled) end
-        if input.KeyCode == keybinds.InfJump then toggleInfJump(not infJumpEnabled) end -- ✅ TECLA INFJUMP
+        if input.KeyCode == keybinds.InfJump then toggleInfJump(not infJumpEnabled) end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
         if input.KeyCode == keybinds.Teleport then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
         if input.KeyCode == keybinds.Delete then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
