@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Sigilosa - RST Arreglado)
+-- HUB: xcs (Versión Sigilosa - Anti-VC Fijo)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -50,6 +50,7 @@ local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
+local antiVCEnabled = false -- 🎙️ Estado del Anti-VC Continuo
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -65,6 +66,7 @@ local flyBodyGyro = nil
 local fpXRayConnection = nil
 local invisicamConnection = nil
 local espConnection = nil
+local antiVCConnection = nil
 local transparentParts = {}
 local deletedPartsMemory = {}
 local espHighlights = {}
@@ -166,7 +168,7 @@ Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
 
 local MainFrame = Instance.new("Frame")
 Stealth.HideInstance(MainFrame)
-MainFrame.Size = UDim2.new(0, 180, 0, 320)
+MainFrame.Size = UDim2.new(0, 180, 0, 340)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
@@ -244,7 +246,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 420)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 460)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -295,46 +297,6 @@ MainPadding.Parent = MainScroll
 local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
 if not isTouchDevice then TPSwitchContainer.Visible = false end
 
--- 🎙️ Función de Anti-VC por Acción Directa (Reset de Micro)
-local function TriggerAntiVC()
-    pcall(function()
-        if VoiceChatService then
-            pcall(function() VoiceChatService:LeaveVoice() end)
-            pcall(function() VoiceChatService:PublishAudioOff() end)
-            task.wait(0.2)
-            pcall(function() VoiceChatService:JoinVoice() end)
-            pcall(function() VoiceChatService:PublishAudioOn() end)
-            pcall(function() VoiceChatService:EnableVoiceChat() end)
-        end
-    end)
-end
-
--- Botón de Acción Anti-VC colocado arriba en el Menú Principal
-local AntiVCBtnContainer = Instance.new("Frame")
-AntiVCBtnContainer.Size = UDim2.new(1, 0, 0, 26)
-AntiVCBtnContainer.BackgroundTransparency = 1
-AntiVCBtnContainer.Parent = MainScroll
-
-local AntiVCActionBtn = Instance.new("TextButton")
-AntiVCActionBtn.Size = UDim2.new(0.9, 0, 1, 0)
-AntiVCActionBtn.Position = UDim2.new(0.05, 0, 0, 0)
-AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-AntiVCActionBtn.Text = "🎙️ RESET MICRO (ANTI-VC)"
-AntiVCActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AntiVCActionBtn.Font = Enum.Font.GothamBold
-AntiVCActionBtn.TextSize = 9
-AntiVCActionBtn.Parent = AntiVCBtnContainer
-Instance.new("UICorner", AntiVCActionBtn).CornerRadius = UDim.new(0, 5)
-
-AntiVCActionBtn.MouseButton1Click:Connect(function()
-    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    AntiVCActionBtn.Text = "⚡ RECONECTANDO..."
-    TriggerAntiVC()
-    task.wait(0.5)
-    AntiVCActionBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-    AntiVCActionBtn.Text = "🎙️ RESET MICRO (ANTI-VC)"
-end)
-
 local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
@@ -344,6 +306,41 @@ local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Ju
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
+
+-- 🎙️ Interruptor Anti-VC Continuo (Con Palomita / Switch)
+local AntiVCSwitchBg, AntiVCSwitchKnob = createSwitch(MainScroll, "Anti-VC Continuo")
+
+local function toggleAntiVC(state)
+    antiVCEnabled = state
+    AntiVCSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    AntiVCSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if QuickButtons["AntiVC"] then QuickButtons["AntiVC"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
+
+    if state then
+        if antiVCConnection then antiVCConnection:Disconnect() end
+        antiVCConnection = Stealth.HideConnections(RunService.Stepped:Connect(function()
+            if not antiVCEnabled then return end
+            pcall(function()
+                if VoiceChatService then
+                    -- Fuerza el servicio activo en bucle para que el micro no se bloquee por completo
+                    if not VoiceChatService:IsVoiceEnabled() then
+                        VoiceChatService:JoinVoice()
+                    end
+                end
+            end)
+        end))
+    else
+        if antiVCConnection then antiVCConnection:Disconnect() end
+        antiVCConnection = nil
+    end
+end
+
+AntiVCSwitchBg.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        toggleAntiVC(not antiVCEnabled)
+    end
+end)
+
 
 -- (Ventana de TP a Jugadores)
 local PlayerWindow = Instance.new("Frame")
@@ -1063,15 +1060,10 @@ createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 
--- Botón rápido flotante para Anti-VC (Acción Directa)
-createQuickBtn("AntiVC", "VC", UDim2.new(0, 60, 0, 190), function()
-    TriggerAntiVC()
-    if QuickButtons["AntiVC"] then
-        QuickButtons["AntiVC"].BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-        task.wait(0.4)
-        QuickButtons["AntiVC"].BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    end
-end, nil)
+-- Botón rápido flotante para Anti-VC continuo (Con palomita/estado)
+createQuickBtn("AntiVC", "AVC", UDim2.new(0, 60, 0, 190), function()
+    toggleAntiVC(not antiVCEnabled)
+end, function() return antiVCEnabled end)
 
 if QuickButtons["AntiVC"] and quickButtonsMaster then
     QuickButtons["AntiVC"].Visible = true
