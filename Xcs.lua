@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Con Tercera Persona y Zoom Libre)
+-- HUB: xcs (Invisicam con Zoom Libre + Tercera Persona)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -49,7 +49,7 @@ local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
-local thirdPersonEnabled = false -- 🎥 Estado de Tercera Persona
+local thirdPersonEnabled = false
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -305,9 +305,41 @@ local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Ju
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
-local ThirdPersonSwitchBg, ThirdPersonSwitchKnob = createSwitch(MainScroll, "Third Person") -- 🎥 Botón agregado al menú
+local ThirdPersonSwitchBg, ThirdPersonSwitchKnob = createSwitch(MainScroll, "Third Person")
 
--- 🎥 Lógica de Tercera Persona y Zoom Libre (Permite forzar 3ra persona y alejar zoom)
+-- 🎥 Lógica de Invisicam con Zoom Libre integrado
+local function toggleInvisicam(state)
+    invisicamEnabled = state
+    SwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    SwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
+    
+    if state then
+        pcall(function() 
+            LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam 
+            -- Desbloquea el zoom libre al activar Invisicam
+            LocalPlayer.CameraMaxZoomDistance = 400
+            LocalPlayer.CameraMinZoomDistance = 0.5
+        end)
+        if invisicamConnection then invisicamConnection:Disconnect() end
+        invisicamConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
+            if not invisicamEnabled then return end
+            pcall(function()
+                if LocalPlayer.CameraMaxZoomDistance < 400 then
+                    LocalPlayer.CameraMaxZoomDistance = 400
+                end
+            end)
+        end))
+    else
+        pcall(function() 
+            LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom 
+            LocalPlayer.CameraMaxZoomDistance = 15 -- Valor por defecto
+        end)
+        if invisicamConnection then invisicamConnection:Disconnect() end
+        invisicamConnection = nil
+    end
+end
+
 local function toggleThirdPerson(state)
     thirdPersonEnabled = state
     ThirdPersonSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -318,10 +350,7 @@ local function toggleThirdPerson(state)
         pcall(function()
             LocalPlayer.CameraMode = Enum.CameraMode.Classic
             LocalPlayer.DevComputerCameraMode = Enum.DevComputerCameraMode.Classic
-            LocalPlayer.DevTouchCameraMode = Enum.DevTouchCameraMode.Classic
-            -- Desbloquea el zoom máximo y mínimo para alejar la cámara libremente
-            LocalPlayer.CameraMaxZoomDistance = 400
-            LocalPlayer.CameraMinZoomDistance = 0.5
+            LocalPlayer.DevTouchCameraMode = Enum.DevComputerCameraMode.Classic
         end)
         if thirdPersonConnection then thirdPersonConnection:Disconnect() end
         thirdPersonConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
@@ -330,17 +359,11 @@ local function toggleThirdPerson(state)
                 if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
                     LocalPlayer.CameraMode = Enum.CameraMode.Classic
                 end
-                if LocalPlayer.CameraMaxZoomDistance < 400 then
-                    LocalPlayer.CameraMaxZoomDistance = 400
-                end
             end)
         end))
     else
         if thirdPersonConnection then thirdPersonConnection:Disconnect() end
         thirdPersonConnection = nil
-        pcall(function()
-            LocalPlayer.CameraMaxZoomDistance = 15 -- Valor predeterminado de Roblox
-        end)
     end
 end
 
@@ -702,19 +725,6 @@ local function RestoreMap()
     deletedPartsMemory = {}
 end
 
-local function toggleInvisicam(state)
-    invisicamEnabled = state
-    SwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    SwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
-    if state then
-        pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
-    else
-        pcall(function() LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
-        if invisicamConnection then invisicamConnection:Disconnect() end
-    end
-end
-
 local function toggleFPXRay(state)
     fpXRayEnabled = state
     FPXRaySwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
@@ -1062,7 +1072,7 @@ createQuickBtn("InfJump", "JMP", UDim2.new(0, 100, 0, 145), function() toggleInf
 createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
-createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggleThirdPerson(not thirdPersonEnabled) end, function() return thirdPersonEnabled end) -- 🎥 Botón rápido flotante
+createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggleThirdPerson(not thirdPersonEnabled) end, function() return thirdPersonEnabled end)
 
 -- ✅ CREACIÓN DEL BOTÓN RESTAURAR (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
@@ -1286,7 +1296,7 @@ createQuickConfig("Infinite Jump", "InfJump")
 createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
 createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 createQuickConfig("Fullbright", "Fullbright")
-createQuickConfig("Third Person", "ThirdPerson") -- 🎥 Configuración en el menú de ajustes
+createQuickConfig("Third Person", "ThirdPerson")
 
 local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, "Botón Restaurar")
 local rstEnabled = loadButtonState("Restore")
