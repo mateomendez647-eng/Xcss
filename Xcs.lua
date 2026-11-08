@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Versión Limpia sin Anti-VC)
+-- HUB: xcs (Con Tercera Persona y Zoom Libre)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -49,6 +49,7 @@ local fullbrightEnabled = false
 local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
+local thirdPersonEnabled = false -- 🎥 Estado de Tercera Persona
 local quickButtonsMaster = true
 
 local flySpeed = 50
@@ -64,6 +65,7 @@ local flyBodyGyro = nil
 local fpXRayConnection = nil
 local invisicamConnection = nil
 local espConnection = nil
+local thirdPersonConnection = nil
 local transparentParts = {}
 local deletedPartsMemory = {}
 local espHighlights = {}
@@ -165,7 +167,7 @@ Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
 
 local MainFrame = Instance.new("Frame")
 Stealth.HideInstance(MainFrame)
-MainFrame.Size = UDim2.new(0, 180, 0, 315)
+MainFrame.Size = UDim2.new(0, 180, 0, 335)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
@@ -243,7 +245,7 @@ MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
 MainScroll.ScrollBarThickness = 3
 MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 440)
 MainScroll.Parent = MainFrame
 
 local function createSwitch(parent, text)
@@ -303,6 +305,44 @@ local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Ju
 local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
+local ThirdPersonSwitchBg, ThirdPersonSwitchKnob = createSwitch(MainScroll, "Third Person") -- 🎥 Botón agregado al menú
+
+-- 🎥 Lógica de Tercera Persona y Zoom Libre (Permite forzar 3ra persona y alejar zoom)
+local function toggleThirdPerson(state)
+    thirdPersonEnabled = state
+    ThirdPersonSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    ThirdPersonSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if QuickButtons["ThirdPerson"] then QuickButtons["ThirdPerson"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
+
+    if state then
+        pcall(function()
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+            LocalPlayer.DevComputerCameraMode = Enum.DevComputerCameraMode.Classic
+            LocalPlayer.DevTouchCameraMode = Enum.DevTouchCameraMode.Classic
+            -- Desbloquea el zoom máximo y mínimo para alejar la cámara libremente
+            LocalPlayer.CameraMaxZoomDistance = 400
+            LocalPlayer.CameraMinZoomDistance = 0.5
+        end)
+        if thirdPersonConnection then thirdPersonConnection:Disconnect() end
+        thirdPersonConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
+            if not thirdPersonEnabled then return end
+            pcall(function()
+                if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
+                    LocalPlayer.CameraMode = Enum.CameraMode.Classic
+                end
+                if LocalPlayer.CameraMaxZoomDistance < 400 then
+                    LocalPlayer.CameraMaxZoomDistance = 400
+                end
+            end)
+        end))
+    else
+        if thirdPersonConnection then thirdPersonConnection:Disconnect() end
+        thirdPersonConnection = nil
+        pcall(function()
+            LocalPlayer.CameraMaxZoomDistance = 15 -- Valor predeterminado de Roblox
+        end)
+    end
+end
 
 -- (Ventana de TP a Jugadores)
 local PlayerWindow = Instance.new("Frame")
@@ -908,6 +948,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     if fpXRayEnabled then toggleFPXRay(true) end
     if fullbrightEnabled then toggleFullbright(true) end
     if espEnabled then toggleESP(true) end
+    if thirdPersonEnabled then toggleThirdPerson(true) end
 end)
 
 -- Arrastre de ventanas
@@ -1021,6 +1062,7 @@ createQuickBtn("InfJump", "JMP", UDim2.new(0, 100, 0, 145), function() toggleInf
 createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not flyEnabled) end, function() return flyEnabled end)
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end, function() return freeCamEnabled end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
+createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggleThirdPerson(not thirdPersonEnabled) end, function() return thirdPersonEnabled end) -- 🎥 Botón rápido flotante
 
 -- ✅ CREACIÓN DEL BOTÓN RESTAURAR (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
@@ -1089,6 +1131,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
         Quick_Fly = UDim2.new(0, 140, 0, 145),
         Quick_FreeCam = UDim2.new(0, 180, 0, 145),
         Quick_Fullbright = UDim2.new(0, 220, 0, 145),
+        Quick_ThirdPerson = UDim2.new(0, 260, 0, 145),
         Quick_Restore = UDim2.new(0, 60, 0, 190)
     }
 
@@ -1108,6 +1151,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     if QuickButtons["Fly"] then QuickButtons["Fly"].Position = defaultPositions.Quick_Fly end
     if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = defaultPositions.Quick_FreeCam end
     if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = defaultPositions.Quick_Fullbright end
+    if QuickButtons["ThirdPerson"] then QuickButtons["ThirdPerson"].Position = defaultPositions.Quick_ThirdPerson end
     if QuickButtons["Restore"] then QuickButtons["Restore"].Position = defaultPositions.Quick_Restore end
 
     savePosition("MainFrame", defaultPositions.MainFrame)
@@ -1126,6 +1170,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     savePosition("Quick_Fly", defaultPositions.Quick_Fly)
     savePosition("Quick_FreeCam", defaultPositions.Quick_FreeCam)
     savePosition("Quick_Fullbright", defaultPositions.Quick_Fullbright)
+    savePosition("Quick_ThirdPerson", defaultPositions.Quick_ThirdPerson)
     savePosition("Quick_Restore", defaultPositions.Quick_Restore)
 
     ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
@@ -1241,6 +1286,7 @@ createQuickConfig("Infinite Jump", "InfJump")
 createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
 createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
 createQuickConfig("Fullbright", "Fullbright")
+createQuickConfig("Third Person", "ThirdPerson") -- 🎥 Configuración en el menú de ajustes
 
 local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, "Botón Restaurar")
 local rstEnabled = loadButtonState("Restore")
@@ -1276,6 +1322,7 @@ InfJumpSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enu
 FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFly(not flyEnabled) end end)
 FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFreeCam(not freeCamEnabled) end end)
 FullbrightSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end end)
+ThirdPersonSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleThirdPerson(not thirdPersonEnabled) end end)
 
 MasterQuickBtn.MouseButton1Click:Connect(function()
     quickButtonsMaster = not quickButtonsMaster
