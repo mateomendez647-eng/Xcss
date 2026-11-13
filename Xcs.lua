@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Invisicam con Zoom Libre + Tercera Persona)
+-- HUB: xcs (Neon Glass Edition - Compacto)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -12,6 +12,21 @@ local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
+
+-- 🎨 PALETA NEON GLASS
+local THEME = {
+    BgMain      = Color3.fromRGB(13, 17, 26),
+    BgHeader    = Color3.fromRGB(18, 24, 36),
+    BgCard      = Color3.fromRGB(22, 29, 43),
+    BgCardOn    = Color3.fromRGB(16, 48, 38),
+    AccentCyan  = Color3.fromRGB(0, 210, 255),
+    AccentGreen = Color3.fromRGB(0, 220, 120),
+    AccentRed   = Color3.fromRGB(235, 65, 85),
+    AccentAmber = Color3.fromRGB(240, 150, 30),
+    SwitchOff   = Color3.fromRGB(45, 55, 72),
+    TextMain    = Color3.fromRGB(240, 245, 255),
+    TextMuted   = Color3.fromRGB(145, 160, 185),
+}
 
 -- 🛡️ MÓDULO DE SIGILO (STEALTH)
 local Stealth = {}
@@ -78,6 +93,7 @@ local camPos = Vector3.new(0, 0, 0)
 local savedLighting = {}
 local listeningFor = nil
 local QuickButtons = {}
+local QuickButtonStrokes = {}
 local filterQuery = ""
 local spectatingPlayer = nil
 
@@ -103,9 +119,8 @@ local function loadPosition(name, defaultUDim2)
     return defaultUDim2
 end
 local function saveButtonState(btnName, state) saveData("BtnState_" .. btnName, tostring(state)) end
-local function loadButtonState(btnName) 
-    local defaultState = (btnName == "Restore") and "true" or "true"
-    return loadData("BtnState_" .. btnName, defaultState) == "true" 
+local function loadButtonState(btnName)
+    return loadData("BtnState_" .. btnName, "true") == "true"
 end
 local function saveKeybind(keyName, keyCode) saveData("Key_" .. keyName, keyCode.Name) end
 local function loadKeybind(keyName, defaultCode)
@@ -131,7 +146,18 @@ local keybinds = {
     InfJump    = loadKeybind("InfJump",    Enum.KeyCode.J),
 }
 
--- 🛡️ INTERFAZ PROTEGIDA
+-- Helper de bordes neón
+local function applyNeonStroke(parent, color, transparency, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or THEME.AccentCyan
+    stroke.Transparency = transparency or 0.45
+    stroke.Thickness = thickness or 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = parent
+    return stroke
+end
+
+-- 🛡️ INTERFAZ PROTEGIDA (NEON GLASS)
 local ScreenGui = Instance.new("ScreenGui")
 Stealth.HideInstance(ScreenGui)
 ScreenGui.ResetOnSpawn = false
@@ -139,138 +165,144 @@ ScreenGui.IgnoreGuiInset = true
 local successParent = pcall(function() ScreenGui.Parent = CoreGui end)
 if not successParent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
+-- Botón flotante principal (xcs)
 local MiniBtn = Instance.new("TextButton")
-MiniBtn.Size = UDim2.new(0, 45, 0, 45)
+MiniBtn.Size = UDim2.new(0, 44, 0, 44)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0, 200))
-MiniBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MiniBtn.BackgroundColor3 = THEME.BgMain
+MiniBtn.BackgroundTransparency = 0.15
 MiniBtn.Text = "xcs"
-MiniBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MiniBtn.TextSize = 12
+MiniBtn.TextColor3 = THEME.AccentCyan
+MiniBtn.TextSize = 13
 MiniBtn.Font = Enum.Font.GothamBold
-MiniBtn.Visible = true 
+MiniBtn.Visible = true
 MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
-Instance.new("UIStroke", MiniBtn).Color = Color3.fromRGB(0, 150, 255)
+applyNeonStroke(MiniBtn, THEME.AccentCyan, 0.2, 1.5)
 
+-- Botón flotante minimizado de TP Jugadores (P)
 local MiniTpBtn = Instance.new("TextButton")
-MiniTpBtn.Size = UDim2.new(0, 45, 0, 45)
-MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 70, 0, 200))
-MiniTpBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MiniTpBtn.Text = "P"
-MiniTpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MiniTpBtn.TextSize = 14
+MiniTpBtn.Size = UDim2.new(0, 44, 0, 44)
+MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 68, 0, 200))
+MiniTpBtn.BackgroundColor3 = THEME.BgMain
+MiniTpBtn.BackgroundTransparency = 0.15
+MiniTpBtn.Text = "TP"
+MiniTpBtn.TextColor3 = THEME.AccentCyan
+MiniTpBtn.TextSize = 12
 MiniTpBtn.Font = Enum.Font.GothamBold
 MiniTpBtn.Visible = false
 MiniTpBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniTpBtn).CornerRadius = UDim.new(1, 0)
-Instance.new("UIStroke", MiniTpBtn).Color = Color3.fromRGB(0, 150, 255)
+applyNeonStroke(MiniTpBtn, THEME.AccentCyan, 0.25, 1.5)
 
+-- Ventana Principal Compacta
 local MainFrame = Instance.new("Frame")
 Stealth.HideInstance(MainFrame)
-MainFrame.Size = UDim2.new(0, 180, 0, 335)
-MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 100, 0, 100))
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Size = UDim2.new(0, 215, 0, 350)
+MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 20, 0, 90))
+MainFrame.BackgroundColor3 = THEME.BgMain
+MainFrame.BackgroundTransparency = 0.12
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+applyNeonStroke(MainFrame, THEME.AccentCyan, 0.35, 1.3)
 
 local Title = Instance.new("TextButton")
-Title.Size = UDim2.new(1, 0, 0, 25)
-Title.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-Title.Text = " xcs Hub"
-Title.TextColor3 = Color3.fromRGB(200, 200, 200)
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = THEME.BgHeader
+Title.BackgroundTransparency = 0.15
+Title.Text = "  ◈ xcs Hub"
+Title.TextColor3 = THEME.TextMain
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 11
 Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.AutoButtonColor = false
 Title.Parent = MainFrame
-Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 12)
 
-local ResetPositionsBtn = Instance.new("TextButton")
-ResetPositionsBtn.Size = UDim2.new(0, 18, 0, 18)
-ResetPositionsBtn.Position = UDim2.new(1, -114, 0, 3)
-ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-ResetPositionsBtn.Text = "🔄"
-ResetPositionsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ResetPositionsBtn.TextSize = 9
-ResetPositionsBtn.Parent = Title
-Instance.new("UICorner", ResetPositionsBtn).CornerRadius = UDim.new(0, 4)
+local HeaderDivider = Instance.new("Frame")
+HeaderDivider.Size = UDim2.new(1, 0, 0, 1)
+HeaderDivider.Position = UDim2.new(0, 0, 1, -1)
+HeaderDivider.BackgroundColor3 = THEME.AccentCyan
+HeaderDivider.BackgroundTransparency = 0.65
+HeaderDivider.BorderSizePixel = 0
+HeaderDivider.Parent = Title
 
-local MasterQuickBtn = Instance.new("TextButton")
-MasterQuickBtn.Size = UDim2.new(0, 18, 0, 18)
-MasterQuickBtn.Position = UDim2.new(1, -91, 0, 3)
-MasterQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-MasterQuickBtn.Text = "👁️"
-MasterQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MasterQuickBtn.TextSize = 10
-MasterQuickBtn.Parent = Title
-Instance.new("UICorner", MasterQuickBtn).CornerRadius = UDim.new(0, 4)
+local function createHeaderBtn(text, offsetX, bgColor, textColor, textSize)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 20, 0, 20)
+    btn.Position = UDim2.new(1, offsetX, 0.5, -10)
+    btn.BackgroundColor3 = bgColor
+    btn.BackgroundTransparency = 0.2
+    btn.Text = text
+    btn.TextColor3 = textColor or THEME.TextMain
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = textSize or 10
+    btn.Parent = Title
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    applyNeonStroke(btn, bgColor, 0.4, 1)
+    return btn
+end
 
-local PlayerWindowToggleBtn = Instance.new("TextButton")
-PlayerWindowToggleBtn.Size = UDim2.new(0, 18, 0, 18)
-PlayerWindowToggleBtn.Position = UDim2.new(1, -68, 0, 3)
-PlayerWindowToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-PlayerWindowToggleBtn.Text = "TP"
-PlayerWindowToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-PlayerWindowToggleBtn.TextSize = 8
-PlayerWindowToggleBtn.Font = Enum.Font.GothamBold
-PlayerWindowToggleBtn.Parent = Title
-Instance.new("UICorner", PlayerWindowToggleBtn).CornerRadius = UDim.new(0, 4)
-
-local SettingsBtn = Instance.new("TextButton")
-SettingsBtn.Size = UDim2.new(0, 18, 0, 18)
-SettingsBtn.Position = UDim2.new(1, -45, 0, 3)
-SettingsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-SettingsBtn.Text = "⚙️"
-SettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SettingsBtn.TextSize = 10
-SettingsBtn.Parent = Title
-Instance.new("UICorner", SettingsBtn).CornerRadius = UDim.new(0, 4)
-
-local MinimizeBtn = Instance.new("TextButton")
-MinimizeBtn.Size = UDim2.new(0, 18, 0, 18)
-MinimizeBtn.Position = UDim2.new(1, -22, 0, 3)
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MinimizeBtn.Text = "X"
-MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeBtn.TextSize = 10
-MinimizeBtn.Font = Enum.Font.GothamBold
-MinimizeBtn.Parent = Title
-Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 4)
+local ResetPositionsBtn     = createHeaderBtn("🔄", -122, THEME.AccentAmber, THEME.TextMain, 9)
+local MasterQuickBtn        = createHeaderBtn("👁️", -98,  THEME.AccentGreen, THEME.TextMain, 10)
+local PlayerWindowToggleBtn = createHeaderBtn("TP", -74,  THEME.AccentCyan,  THEME.BgMain,   8)
+local SettingsBtn           = createHeaderBtn("⚙️", -50,  THEME.BgCard,      THEME.TextMain, 10)
+local MinimizeBtn           = createHeaderBtn("✕",  -26,  THEME.AccentRed,   THEME.TextMain, 10)
 
 local MainScroll = Instance.new("ScrollingFrame")
-MainScroll.Size = UDim2.new(1, 0, 1, -25)
-MainScroll.Position = UDim2.new(0, 0, 0, 25)
+MainScroll.Size = UDim2.new(1, 0, 1, -32)
+MainScroll.Position = UDim2.new(0, 0, 0, 32)
 MainScroll.BackgroundTransparency = 1
 MainScroll.BorderSizePixel = 0
-MainScroll.ScrollBarThickness = 3
-MainScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
-MainScroll.CanvasSize = UDim2.new(0, 0, 0, 440)
+MainScroll.ScrollBarThickness = 2
+MainScroll.ScrollBarImageColor3 = THEME.AccentCyan
+MainScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+MainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 MainScroll.Parent = MainFrame
 
-local function createSwitch(parent, text)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 20)
-    container.BackgroundTransparency = 1
-    container.Parent = parent
+local MainList = Instance.new("UIListLayout")
+MainList.Padding = UDim.new(0, 5)
+MainList.SortOrder = Enum.SortOrder.LayoutOrder
+MainList.Parent = MainScroll
+
+local MainPadding = Instance.new("UIPadding")
+MainPadding.PaddingTop = UDim.new(0, 6)
+MainPadding.PaddingBottom = UDim.new(0, 8)
+MainPadding.PaddingLeft = UDim.new(0, 8)
+MainPadding.PaddingRight = UDim.new(0, 8)
+MainPadding.Parent = MainScroll
+
+-- Tarjeta Neon Glass con Switch tipo píldora
+local function createNeonSwitch(parent, icon, text)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 28)
+    card.BackgroundColor3 = THEME.BgCard
+    card.BackgroundTransparency = 0.25
+    card.BorderSizePixel = 0
+    card.Parent = parent
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
+    local stroke = applyNeonStroke(card, THEME.AccentCyan, 0.78, 1)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.75, 0, 1, 0)
-    label.Position = UDim2.new(0.06, 0, 0, 0)
+    label.Size = UDim2.new(0.74, 0, 1, 0)
+    label.Position = UDim2.new(0, 9, 0, 0)
     label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    label.Font = Enum.Font.Gotham
+    label.Text = (icon ~= "" and (icon .. "  ") or "") .. text
+    label.TextColor3 = THEME.TextMain
+    label.Font = Enum.Font.GothamMedium
     label.TextSize = 10
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
+    label.Parent = card
 
     local bg = Instance.new("TextButton")
-    bg.Size = UDim2.new(0, 30, 0, 16)
-    bg.Position = UDim2.new(0.8, 0, 0.5, -8)
-    bg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    bg.Size = UDim2.new(0, 32, 0, 16)
+    bg.Position = UDim2.new(1, -40, 0.5, -8)
+    bg.BackgroundColor3 = THEME.SwitchOff
     bg.Text = ""
-    bg.Parent = container
+    bg.AutoButtonColor = false
+    bg.Parent = card
     Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("Frame")
@@ -280,44 +312,51 @@ local function createSwitch(parent, text)
     knob.Parent = bg
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
-    return bg, knob, container
+    return bg, knob, card, stroke
 end
 
-local MainList = Instance.new("UIListLayout")
-MainList.Padding = UDim.new(0, 8)
-MainList.SortOrder = Enum.SortOrder.LayoutOrder
-MainList.Parent = MainScroll
+local function setSwitchVisual(state, bg, knob, card, stroke, quickKey)
+    bg.BackgroundColor3 = state and THEME.AccentGreen or THEME.SwitchOff
+    knob.Position = state and UDim2.new(0, 18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    if card then
+        card.BackgroundColor3 = state and THEME.BgCardOn or THEME.BgCard
+    end
+    if stroke then
+        stroke.Color = state and THEME.AccentGreen or THEME.AccentCyan
+        stroke.Transparency = state and 0.35 or 0.78
+    end
+    if quickKey and QuickButtons[quickKey] then
+        QuickButtons[quickKey].BackgroundColor3 = state and THEME.BgCardOn or THEME.BgMain
+        QuickButtons[quickKey].TextColor3 = state and THEME.AccentGreen or THEME.TextMain
+        if QuickButtonStrokes[quickKey] then
+            QuickButtonStrokes[quickKey].Color = state and THEME.AccentGreen or THEME.AccentCyan
+            QuickButtonStrokes[quickKey].Transparency = state and 0.15 or 0.45
+        end
+    end
+end
 
-local MainPadding = Instance.new("UIPadding")
-MainPadding.PaddingTop = UDim.new(0, 10)
-MainPadding.PaddingLeft = UDim.new(0, 5)
-MainPadding.Parent = MainScroll
+local TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke = createNeonSwitch(MainScroll, "📍", "TPS (Toque)")
+if not isTouchDevice then TPSwitchCard.Visible = false end
 
-local TPSwitchBg, TPSwitchKnob, TPSwitchContainer = createSwitch(MainScroll, "TPS")
-if not isTouchDevice then TPSwitchContainer.Visible = false end
-
-local SwitchBg, SwitchKnob = createSwitch(MainScroll, "Invisicam")
-local FPXRaySwitchBg, FPXRaySwitchKnob = createSwitch(MainScroll, "FP X-Ray")
-local ESPSwitchBg, ESPSwitchKnob = createSwitch(MainScroll, "ESP Jugadores")
-local DeleteSwitchBg, DeleteSwitchKnob = createSwitch(MainScroll, "Borrador de Paredes")
-local NoclipSwitchBg, NoclipSwitchKnob = createSwitch(MainScroll, "Noclip")
-local InfJumpSwitchBg, InfJumpSwitchKnob = createSwitch(MainScroll, "Infinite Jump")
-local FlySwitchBg, FlySwitchKnob = createSwitch(MainScroll, "Fly")
-local FreeCamSwitchBg, FreeCamSwitchKnob = createSwitch(MainScroll, "Free Cam")
-local FullbrightSwitchBg, FullbrightSwitchKnob = createSwitch(MainScroll, "Fullbright")
-local ThirdPersonSwitchBg, ThirdPersonSwitchKnob = createSwitch(MainScroll, "Third Person")
+local SwitchBg, SwitchKnob, SwitchCard, SwitchStroke = createNeonSwitch(MainScroll, "👁️", "Invisicam")
+local FPXRaySwitchBg, FPXRaySwitchKnob, FPXRayCard, FPXRayStroke = createNeonSwitch(MainScroll, "🧱", "FP X-Ray")
+local ESPSwitchBg, ESPSwitchKnob, ESPCard, ESPStroke = createNeonSwitch(MainScroll, "🎯", "ESP Jugadores")
+local DeleteSwitchBg, DeleteSwitchKnob, DeleteCard, DeleteStroke = createNeonSwitch(MainScroll, "🗑️", "Borrador Paredes")
+local NoclipSwitchBg, NoclipSwitchKnob, NoclipCard, NoclipStroke = createNeonSwitch(MainScroll, "👻", "Noclip")
+local InfJumpSwitchBg, InfJumpSwitchKnob, InfJumpCard, InfJumpStroke = createNeonSwitch(MainScroll, "⚡", "Infinite Jump")
+local FlySwitchBg, FlySwitchKnob, FlyCard, FlyStroke = createNeonSwitch(MainScroll, "🕊️", "Fly")
+local FreeCamSwitchBg, FreeCamSwitchKnob, FreeCamCard, FreeCamStroke = createNeonSwitch(MainScroll, "🎥", "Free Cam")
+local FullbrightSwitchBg, FullbrightSwitchKnob, FullbrightCard, FullbrightStroke = createNeonSwitch(MainScroll, "☀️", "Fullbright")
+local ThirdPersonSwitchBg, ThirdPersonSwitchKnob, ThirdPersonCard, ThirdPersonStroke = createNeonSwitch(MainScroll, "🧍", "Third Person")
 
 -- 🎥 Lógica de Invisicam con Zoom Libre integrado
 local function toggleInvisicam(state)
     invisicamEnabled = state
-    SwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    SwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
-    
+    setSwitchVisual(state, SwitchBg, SwitchKnob, SwitchCard, SwitchStroke, "Invisicam")
+
     if state then
-        pcall(function() 
-            LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam 
-            -- Desbloquea el zoom libre al activar Invisicam
+        pcall(function()
+            LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
             LocalPlayer.CameraMaxZoomDistance = 400
             LocalPlayer.CameraMinZoomDistance = 0.5
         end)
@@ -331,9 +370,9 @@ local function toggleInvisicam(state)
             end)
         end))
     else
-        pcall(function() 
-            LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom 
-            LocalPlayer.CameraMaxZoomDistance = 15 -- Valor por defecto
+        pcall(function()
+            LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
+            LocalPlayer.CameraMaxZoomDistance = 15
         end)
         if invisicamConnection then invisicamConnection:Disconnect() end
         invisicamConnection = nil
@@ -342,15 +381,13 @@ end
 
 local function toggleThirdPerson(state)
     thirdPersonEnabled = state
-    ThirdPersonSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    ThirdPersonSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["ThirdPerson"] then QuickButtons["ThirdPerson"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30) end
+    setSwitchVisual(state, ThirdPersonSwitchBg, ThirdPersonSwitchKnob, ThirdPersonCard, ThirdPersonStroke, "ThirdPerson")
 
     if state then
         pcall(function()
             LocalPlayer.CameraMode = Enum.CameraMode.Classic
             LocalPlayer.DevComputerCameraMode = Enum.DevComputerCameraMode.Classic
-            LocalPlayer.DevTouchCameraMode = Enum.DevComputerCameraMode.Classic
+            LocalPlayer.DevTouchCameraMode = Enum.DevTouchCameraMode.Classic
         end)
         if thirdPersonConnection then thirdPersonConnection:Disconnect() end
         thirdPersonConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
@@ -367,56 +404,62 @@ local function toggleThirdPerson(state)
     end
 end
 
--- (Ventana de TP a Jugadores)
+-- 👥 Ventana de TP a Jugadores (Neon Glass)
 local PlayerWindow = Instance.new("Frame")
-PlayerWindow.Size = UDim2.new(0, 180, 0, 300)
-PlayerWindow.Position = loadPosition("PlayerWindow", UDim2.new(0, 300, 0, 100))
-PlayerWindow.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Stealth.HideInstance(PlayerWindow)
+PlayerWindow.Size = UDim2.new(0, 200, 0, 310)
+PlayerWindow.Position = loadPosition("PlayerWindow", UDim2.new(0, 245, 0, 90))
+PlayerWindow.BackgroundColor3 = THEME.BgMain
+PlayerWindow.BackgroundTransparency = 0.12
 PlayerWindow.BorderSizePixel = 0
 PlayerWindow.Visible = false
 PlayerWindow.Parent = ScreenGui
-Instance.new("UICorner", PlayerWindow).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", PlayerWindow).CornerRadius = UDim.new(0, 12)
+applyNeonStroke(PlayerWindow, THEME.AccentCyan, 0.35, 1.3)
 
 local PlayerWindowTitle = Instance.new("TextButton")
-PlayerWindowTitle.Size = UDim2.new(1, 0, 0, 25)
-PlayerWindowTitle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-PlayerWindowTitle.Text = " TP Jugadores"
-PlayerWindowTitle.TextColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowTitle.Size = UDim2.new(1, 0, 0, 28)
+PlayerWindowTitle.BackgroundColor3 = THEME.BgHeader
+PlayerWindowTitle.BackgroundTransparency = 0.15
+PlayerWindowTitle.Text = "  👥 TP Jugadores"
+PlayerWindowTitle.TextColor3 = THEME.AccentCyan
 PlayerWindowTitle.Font = Enum.Font.GothamBold
 PlayerWindowTitle.TextSize = 11
 PlayerWindowTitle.TextXAlignment = Enum.TextXAlignment.Left
+PlayerWindowTitle.AutoButtonColor = false
 PlayerWindowTitle.Parent = PlayerWindow
-Instance.new("UICorner", PlayerWindowTitle).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", PlayerWindowTitle).CornerRadius = UDim.new(0, 12)
 
 local PlayerWindowMinBtn = Instance.new("TextButton")
-PlayerWindowMinBtn.Size = UDim2.new(0, 18, 0, 18)
-PlayerWindowMinBtn.Position = UDim2.new(1, -43, 0, 3)
-PlayerWindowMinBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-PlayerWindowMinBtn.Text = "-"
-PlayerWindowMinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-PlayerWindowMinBtn.TextSize = 10
+PlayerWindowMinBtn.Size = UDim2.new(0, 19, 0, 19)
+PlayerWindowMinBtn.Position = UDim2.new(1, -46, 0.5, -9)
+PlayerWindowMinBtn.BackgroundColor3 = THEME.BgCard
+PlayerWindowMinBtn.Text = "—"
+PlayerWindowMinBtn.TextColor3 = THEME.TextMain
+PlayerWindowMinBtn.TextSize = 9
 PlayerWindowMinBtn.Font = Enum.Font.GothamBold
 PlayerWindowMinBtn.Parent = PlayerWindowTitle
-Instance.new("UICorner", PlayerWindowMinBtn).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", PlayerWindowMinBtn).CornerRadius = UDim.new(0, 5)
+applyNeonStroke(PlayerWindowMinBtn, THEME.AccentCyan, 0.5, 1)
 
 local PlayerWindowCloseBtn = Instance.new("TextButton")
-PlayerWindowCloseBtn.Size = UDim2.new(0, 18, 0, 18)
-PlayerWindowCloseBtn.Position = UDim2.new(1, -20, 0, 3)
-PlayerWindowCloseBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-PlayerWindowCloseBtn.Text = "X"
-PlayerWindowCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-PlayerWindowCloseBtn.TextSize = 10
+PlayerWindowCloseBtn.Size = UDim2.new(0, 19, 0, 19)
+PlayerWindowCloseBtn.Position = UDim2.new(1, -23, 0.5, -9)
+PlayerWindowCloseBtn.BackgroundColor3 = THEME.AccentRed
+PlayerWindowCloseBtn.Text = "✕"
+PlayerWindowCloseBtn.TextColor3 = THEME.TextMain
+PlayerWindowCloseBtn.TextSize = 9
 PlayerWindowCloseBtn.Font = Enum.Font.GothamBold
 PlayerWindowCloseBtn.Parent = PlayerWindowTitle
-Instance.new("UICorner", PlayerWindowCloseBtn).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", PlayerWindowCloseBtn).CornerRadius = UDim.new(0, 5)
 
 local PlayerWindowScroll = Instance.new("ScrollingFrame")
-PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -25)
-PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 25)
+PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -30)
+PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 30)
 PlayerWindowScroll.BackgroundTransparency = 1
 PlayerWindowScroll.BorderSizePixel = 0
-PlayerWindowScroll.ScrollBarThickness = 3
-PlayerWindowScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
+PlayerWindowScroll.ScrollBarThickness = 2
+PlayerWindowScroll.ScrollBarImageColor3 = THEME.AccentCyan
 PlayerWindowScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 PlayerWindowScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 PlayerWindowScroll.Parent = PlayerWindow
@@ -427,22 +470,26 @@ PlayerWindowScrollList.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerWindowScrollList.Parent = PlayerWindowScroll
 
 local PlayerWindowPadding = Instance.new("UIPadding")
-PlayerWindowPadding.PaddingTop = UDim.new(0, 8)
-PlayerWindowPadding.PaddingLeft = UDim.new(0, 5)
+PlayerWindowPadding.PaddingTop = UDim.new(0, 6)
+PlayerWindowPadding.PaddingBottom = UDim.new(0, 8)
+PlayerWindowPadding.PaddingLeft = UDim.new(0, 8)
+PlayerWindowPadding.PaddingRight = UDim.new(0, 8)
 PlayerWindowPadding.Parent = PlayerWindowScroll
 
 local searchBox = Instance.new("TextBox")
-searchBox.Size = UDim2.new(1, -10, 0, 22)
-searchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+searchBox.Size = UDim2.new(1, 0, 0, 24)
+searchBox.BackgroundColor3 = THEME.BgCard
+searchBox.BackgroundTransparency = 0.15
 searchBox.Text = ""
 searchBox.PlaceholderText = "🔍 Buscar jugador..."
-searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.PlaceholderColor3 = THEME.TextMuted
+searchBox.TextColor3 = THEME.TextMain
 searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 9
+searchBox.TextSize = 10
 searchBox.ClearTextOnFocus = false
 searchBox.Parent = PlayerWindowScroll
-Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(searchBox, THEME.AccentCyan, 0.65, 1)
 
 local PlayerListContainer = Instance.new("Frame")
 PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
@@ -483,29 +530,32 @@ refreshPlayerList = function()
     for _, child in ipairs(PlayerListContainer:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
-    
+
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             local displayName = p.DisplayName
             local userName = p.Name
-            
+
             local isFriend = false
             pcall(function()
                 isFriend = LocalPlayer:IsFriendsWith(p.UserId)
             end)
-            
+
             local formattedName = (isFriend and "⭐ " or "") .. displayName
-            
+
             if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, -10, 0, 26)
-                row.BackgroundTransparency = 1
+                row.Size = UDim2.new(1, 0, 0, 28)
+                row.BackgroundColor3 = THEME.BgCard
+                row.BackgroundTransparency = 0.3
                 row.Parent = PlayerListContainer
+                Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+                applyNeonStroke(row, isFriend and Color3.fromRGB(255, 215, 0) or THEME.AccentCyan, 0.8, 1)
 
                 local thumbImg = Instance.new("ImageLabel")
                 thumbImg.Size = UDim2.new(0, 22, 0, 22)
-                thumbImg.Position = UDim2.new(0, 0, 0.5, -11)
-                thumbImg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                thumbImg.Position = UDim2.new(0, 4, 0.5, -11)
+                thumbImg.BackgroundColor3 = THEME.BgHeader
                 thumbImg.BorderSizePixel = 0
                 thumbImg.Image = ""
                 thumbImg.Parent = row
@@ -526,23 +576,23 @@ refreshPlayerList = function()
                 end)
 
                 local pNameLabel = Instance.new("TextLabel")
-                pNameLabel.Size = UDim2.new(0.42, 0, 1, 0)
-                pNameLabel.Position = UDim2.new(0, 26, 0, 0)
+                pNameLabel.Size = UDim2.new(0.45, 0, 1, 0)
+                pNameLabel.Position = UDim2.new(0, 30, 0, 0)
                 pNameLabel.BackgroundTransparency = 1
                 pNameLabel.Text = formattedName
-                pNameLabel.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(220, 220, 220)
-                pNameLabel.Font = Enum.Font.Gotham
-                pNameLabel.TextSize = 8
+                pNameLabel.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or THEME.TextMain
+                pNameLabel.Font = Enum.Font.GothamMedium
+                pNameLabel.TextSize = 9
                 pNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
                 pNameLabel.TextXAlignment = Enum.TextXAlignment.Left
                 pNameLabel.Parent = row
 
                 local tpBtn = Instance.new("TextButton")
-                tpBtn.Size = UDim2.new(0, 24, 0, 20)
-                tpBtn.Position = UDim2.new(0.68, 0, 0.5, -10)
-                tpBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+                tpBtn.Size = UDim2.new(0, 24, 0, 18)
+                tpBtn.Position = UDim2.new(1, -58, 0.5, -9)
+                tpBtn.BackgroundColor3 = THEME.AccentCyan
                 tpBtn.Text = "TP"
-                tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                tpBtn.TextColor3 = THEME.BgMain
                 tpBtn.Font = Enum.Font.GothamBold
                 tpBtn.TextSize = 8
                 tpBtn.Parent = row
@@ -550,11 +600,11 @@ refreshPlayerList = function()
                 tpBtn.MouseButton1Click:Connect(function() teleportToPlayer(p) end)
 
                 local viewBtn = Instance.new("TextButton")
-                viewBtn.Size = UDim2.new(0, 28, 0, 20)
-                viewBtn.Position = UDim2.new(0.81, 0, 0.5, -10)
-                viewBtn.BackgroundColor3 = (spectatingPlayer == p) and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(50, 50, 50)
+                viewBtn.Size = UDim2.new(0, 28, 0, 18)
+                viewBtn.Position = UDim2.new(1, -31, 0.5, -9)
+                viewBtn.BackgroundColor3 = (spectatingPlayer == p) and THEME.AccentGreen or THEME.SwitchOff
                 viewBtn.Text = "VIEW"
-                viewBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                viewBtn.TextColor3 = THEME.TextMain
                 viewBtn.Font = Enum.Font.GothamBold
                 viewBtn.TextSize = 7
                 viewBtn.Parent = row
@@ -578,47 +628,65 @@ PlayerWindowCloseBtn.MouseButton1Click:Connect(function() PlayerWindow.Visible =
 PlayerWindowToggleBtn.MouseButton1Click:Connect(function() PlayerWindow.Visible = not PlayerWindow.Visible; MiniTpBtn.Visible = false end)
 MiniTpBtn.Activated:Connect(function() PlayerWindow.Visible = true; MiniTpBtn.Visible = false end)
 
--- Ventana de Configuración
+-- ⚙️ Ventana de Configuración (Neon Glass + Visibilidad de Botones Flotantes)
 local SettingsFrame = Instance.new("Frame")
-SettingsFrame.Size = UDim2.new(0, 180, 0, 300)
-SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0, 120, 0, 120))
-SettingsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Stealth.HideInstance(SettingsFrame)
+SettingsFrame.Size = UDim2.new(0, 220, 0, 340)
+SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0, 245, 0, 110))
+SettingsFrame.BackgroundColor3 = THEME.BgMain
+SettingsFrame.BackgroundTransparency = 0.1
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.Visible = false
 SettingsFrame.Parent = ScreenGui
-Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 12)
+applyNeonStroke(SettingsFrame, THEME.AccentCyan, 0.35, 1.3)
+
+local SettingsTitle = Instance.new("TextButton")
+SettingsTitle.Size = UDim2.new(1, 0, 0, 28)
+SettingsTitle.BackgroundColor3 = THEME.BgHeader
+SettingsTitle.BackgroundTransparency = 0.15
+SettingsTitle.Text = "  ⚙️ Ajustes y Botones"
+SettingsTitle.TextColor3 = THEME.AccentCyan
+SettingsTitle.Font = Enum.Font.GothamBold
+SettingsTitle.TextSize = 11
+SettingsTitle.TextXAlignment = Enum.TextXAlignment.Left
+SettingsTitle.AutoButtonColor = false
+SettingsTitle.Parent = SettingsFrame
+Instance.new("UICorner", SettingsTitle).CornerRadius = UDim.new(0, 12)
 
 local CloseSettingsBtn = Instance.new("TextButton")
 CloseSettingsBtn.Size = UDim2.new(0, 20, 0, 20)
-CloseSettingsBtn.Position = UDim2.new(1, -25, 0, 5)
-CloseSettingsBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-CloseSettingsBtn.Text = "X"
-CloseSettingsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseSettingsBtn.Position = UDim2.new(1, -25, 0.5, -10)
+CloseSettingsBtn.BackgroundColor3 = THEME.AccentRed
+CloseSettingsBtn.Text = "✕"
+CloseSettingsBtn.TextColor3 = THEME.TextMain
 CloseSettingsBtn.Font = Enum.Font.GothamBold
 CloseSettingsBtn.TextSize = 10
 CloseSettingsBtn.ZIndex = 10
-CloseSettingsBtn.Parent = SettingsFrame
-Instance.new("UICorner", CloseSettingsBtn).CornerRadius = UDim.new(0, 4)
+CloseSettingsBtn.Parent = SettingsTitle
+Instance.new("UICorner", CloseSettingsBtn).CornerRadius = UDim.new(0, 5)
 
 local SettingsScroll = Instance.new("ScrollingFrame")
-SettingsScroll.Size = UDim2.new(1, 0, 1, 0)
-SettingsScroll.Position = UDim2.new(0, 0, 0, 0)
+SettingsScroll.Size = UDim2.new(1, 0, 1, -30)
+SettingsScroll.Position = UDim2.new(0, 0, 0, 30)
 SettingsScroll.BackgroundTransparency = 1
 SettingsScroll.BorderSizePixel = 0
-SettingsScroll.ScrollBarThickness = 3
-SettingsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 150, 255)
+SettingsScroll.ScrollBarThickness = 2
+SettingsScroll.ScrollBarImageColor3 = THEME.AccentCyan
 SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 SettingsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 SettingsScroll.Parent = SettingsFrame
 
 local SettingsList = Instance.new("UIListLayout")
-SettingsList.Padding = UDim.new(0, 8)
+SettingsList.Padding = UDim.new(0, 5)
 SettingsList.SortOrder = Enum.SortOrder.LayoutOrder
 SettingsList.Parent = SettingsScroll
 
 local SettingsPadding = Instance.new("UIPadding")
-SettingsPadding.PaddingTop = UDim.new(0, 10)
-SettingsPadding.PaddingLeft = UDim.new(0, 5)
+SettingsPadding.PaddingTop = UDim.new(0, 6)
+SettingsPadding.PaddingBottom = UDim.new(0, 10)
+SettingsPadding.PaddingLeft = UDim.new(0, 8)
+SettingsPadding.PaddingRight = UDim.new(0, 8)
 SettingsPadding.Parent = SettingsScroll
 
 -- LÓGICA DE ESP
@@ -629,9 +697,7 @@ end
 
 local function toggleESP(state)
     espEnabled = state
-    ESPSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    ESPSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["ESP"] then QuickButtons["ESP"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, ESPSwitchBg, ESPSwitchKnob, ESPCard, ESPStroke, "ESP")
 
     if state then
         if espConnection then espConnection:Disconnect() end
@@ -664,9 +730,7 @@ end
 
 local function toggleNoclip(state)
     noclipEnabled = state
-    NoclipSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    NoclipSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["Noclip"] then QuickButtons["Noclip"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, NoclipSwitchBg, NoclipSwitchKnob, NoclipCard, NoclipStroke, "Noclip")
 
     if state then
         if noclipConnection then noclipConnection:Disconnect() end
@@ -692,9 +756,7 @@ end
 
 local function toggleInfJump(state)
     infJumpEnabled = state
-    InfJumpSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    InfJumpSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["InfJump"] then QuickButtons["InfJump"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, InfJumpSwitchBg, InfJumpSwitchKnob, InfJumpCard, InfJumpStroke, "InfJump")
 end
 
 UserInputService.JumpRequest:Connect(function()
@@ -711,8 +773,7 @@ end)
 
 local function toggleDeleteMode(state)
     deleteModeEnabled = state
-    DeleteSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    DeleteSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    setSwitchVisual(state, DeleteSwitchBg, DeleteSwitchKnob, DeleteCard, DeleteStroke, "DeleteMode")
 end
 
 local function RestoreMap()
@@ -727,9 +788,7 @@ end
 
 local function toggleFPXRay(state)
     fpXRayEnabled = state
-    FPXRaySwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    FPXRaySwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, FPXRaySwitchBg, FPXRaySwitchKnob, FPXRayCard, FPXRayStroke, "FPXRay")
 
     if state then
         if fpXRayConnection then fpXRayConnection:Disconnect() end
@@ -779,9 +838,7 @@ end
 
 local function toggleFullbright(state)
     fullbrightEnabled = state
-    FullbrightSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    FullbrightSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, FullbrightSwitchBg, FullbrightSwitchKnob, FullbrightCard, FullbrightStroke, "Fullbright")
     if state then
         savedLighting.Ambient = Lighting.Ambient
         savedLighting.OutdoorAmbient = Lighting.OutdoorAmbient
@@ -820,9 +877,7 @@ local toggleFreeCam
 
 local function toggleFly(state)
     flyEnabled = state
-    FlySwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    FlySwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["Fly"] then QuickButtons["Fly"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, FlySwitchBg, FlySwitchKnob, FlyCard, FlyStroke, "Fly")
 
     if state then
         if flyConnection then flyConnection:Disconnect() end
@@ -881,9 +936,7 @@ end
 
 toggleFreeCam = function(state)
     freeCamEnabled = state
-    FreeCamSwitchBg.BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    FreeCamSwitchKnob.Position = state and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].BackgroundColor3 = state and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(40, 40, 40) end
+    setSwitchVisual(state, FreeCamSwitchBg, FreeCamSwitchKnob, FreeCamCard, FreeCamStroke, "FreeCam")
 
     if state then
         if flyEnabled then toggleFly(false) end
@@ -961,55 +1014,59 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     if thirdPersonEnabled then toggleThirdPerson(true) end
 end)
 
--- Arrastre de ventanas
-local function makeDraggable(frame, saveName)
+-- Arrastre de ventanas (soporta arrastrar desde el título o el marco)
+local function makeDraggable(dragHandle, targetFrame, saveName)
     local dragging, dragInput, dragStart, startPos
-    frame.InputBegan:Connect(function(input)
+    dragHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = frame.Position
+            dragging = true; dragStart = input.Position; startPos = targetFrame.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
-                    if saveName then savePosition(saveName, frame.Position) end
+                    if saveName then savePosition(saveName, targetFrame.Position) end
                 end
             end)
         end
     end)
-    frame.InputChanged:Connect(function(input)
+    dragHandle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
     end)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
             local vpSize = Camera.ViewportSize
-            local newX = math.clamp(startPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - frame.AbsoluteSize.X))
-            local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - frame.AbsoluteSize.Y))
-            frame.Position = UDim2.new(0, newX, 0, newY)
+            local newX = math.clamp(startPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - targetFrame.AbsoluteSize.X))
+            local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - targetFrame.AbsoluteSize.Y))
+            targetFrame.Position = UDim2.new(0, newX, 0, newY)
         end
     end)
 end
 
-makeDraggable(MainFrame, "MainFrame")
-makeDraggable(MiniBtn, "MiniBtn")
-makeDraggable(MiniTpBtn, "MiniTpBtn")
-makeDraggable(SettingsFrame, "SettingsFrame")
-makeDraggable(PlayerWindow, "PlayerWindow")
+makeDraggable(Title, MainFrame, "MainFrame")
+makeDraggable(MiniBtn, MiniBtn, "MiniBtn")
+makeDraggable(MiniTpBtn, MiniTpBtn, "MiniTpBtn")
+makeDraggable(SettingsTitle, SettingsFrame, "SettingsFrame")
+makeDraggable(PlayerWindowTitle, PlayerWindow, "PlayerWindow")
 
+-- Botones Flotantes Rápidos (Neon Glass)
 local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 35, 0, 35)
+    btn.Size = UDim2.new(0, 36, 0, 36)
     btn.Position = loadPosition("Quick_" .. name, initialPos)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    btn.BackgroundTransparency = 0.2
+    btn.BackgroundColor3 = THEME.BgMain
+    btn.BackgroundTransparency = 0.15
     btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextColor3 = THEME.TextMain
     btn.TextSize = 9
     btn.Font = Enum.Font.GothamBold
     btn.Visible = false
     btn.Active = true
     btn.Parent = ScreenGui
     Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
+    local stroke = applyNeonStroke(btn, THEME.AccentCyan, 0.45, 1.3)
+
     QuickButtons[name] = btn
+    QuickButtonStrokes[name] = stroke
 
     local startTouchPos, isDragging, dragStartScreenPos, initialButtonPos
     btn.InputBegan:Connect(function(input)
@@ -1033,9 +1090,6 @@ local function createQuickBtn(name, text, initialPos, toggleFunc, getState)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             if startTouchPos and not isDragging then
                 toggleFunc()
-                if getState then
-                    btn.BackgroundColor3 = getState() and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(30, 30, 30)
-                end
             end
             if isDragging then
                 local snapDistance = 35
@@ -1057,10 +1111,8 @@ end
 if isTouchDevice then
     createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0, 100), function()
         tpEnabled = not tpEnabled
-        TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-        TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+        setSwitchVisual(tpEnabled, TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke, "TPS")
     end, function() return tpEnabled end)
-    QuickButtons["TPS"].Visible = true
 end
 
 createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleInvisicam(not invisicamEnabled) end, function() return invisicamEnabled end)
@@ -1074,24 +1126,22 @@ createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFre
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end, function() return fullbrightEnabled end)
 createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggleThirdPerson(not thirdPersonEnabled) end, function() return thirdPersonEnabled end)
 
--- ✅ CREACIÓN DEL BOTÓN RESTAURAR (RST)
+-- Botón Restaurar Flotante (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
-RestoreQuickBtn.Size = UDim2.new(0, 35, 0, 35)
-RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190)) 
-RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-RestoreQuickBtn.BackgroundTransparency = 0.2
+RestoreQuickBtn.Size = UDim2.new(0, 36, 0, 36)
+RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190))
+RestoreQuickBtn.BackgroundColor3 = THEME.BgMain
+RestoreQuickBtn.BackgroundTransparency = 0.15
 RestoreQuickBtn.Text = "RST"
-RestoreQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RestoreQuickBtn.TextColor3 = THEME.AccentRed
 RestoreQuickBtn.TextSize = 9
 RestoreQuickBtn.Font = Enum.Font.GothamBold
 RestoreQuickBtn.Visible = false
 RestoreQuickBtn.Parent = ScreenGui
 Instance.new("UICorner", RestoreQuickBtn).CornerRadius = UDim.new(1, 0)
+local rstStroke = applyNeonStroke(RestoreQuickBtn, THEME.AccentRed, 0.35, 1.3)
 QuickButtons["Restore"] = RestoreQuickBtn
-
-if loadButtonState("Restore") and quickButtonsMaster then
-    RestoreQuickBtn.Visible = true
-end
+QuickButtonStrokes["Restore"] = rstStroke
 
 local rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos
 RestoreQuickBtn.InputBegan:Connect(function(input)
@@ -1115,22 +1165,25 @@ RestoreQuickBtn.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         if rStartPos and not rIsDragging then
             RestoreMap()
-            RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+            RestoreQuickBtn.TextColor3 = THEME.AccentGreen
+            rstStroke.Color = THEME.AccentGreen
             task.wait(0.3)
-            RestoreQuickBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            RestoreQuickBtn.TextColor3 = THEME.AccentRed
+            rstStroke.Color = THEME.AccentRed
         end
         if rIsDragging then savePosition("Quick_Restore", RestoreQuickBtn.Position) end
         rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos = nil, false, nil, nil
     end
 end)
 
+-- Resetear posiciones
 ResetPositionsBtn.MouseButton1Click:Connect(function()
     local defaultPositions = {
-        MainFrame = UDim2.new(0, 100, 0, 100),
+        MainFrame = UDim2.new(0, 20, 0, 90),
         MiniBtn = UDim2.new(0, 15, 0, 200),
-        MiniTpBtn = UDim2.new(0, 70, 0, 200),
-        SettingsFrame = UDim2.new(0, 120, 0, 120),
-        PlayerWindow = UDim2.new(0, 300, 0, 100),
+        MiniTpBtn = UDim2.new(0, 68, 0, 200),
+        SettingsFrame = UDim2.new(0, 245, 0, 110),
+        PlayerWindow = UDim2.new(0, 245, 0, 90),
         Quick_TPS = UDim2.new(0, 60, 0, 100),
         Quick_Invisicam = UDim2.new(0, 100, 0, 100),
         Quick_FPXRay = UDim2.new(0, 140, 0, 100),
@@ -1151,112 +1204,132 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
     SettingsFrame.Position = defaultPositions.SettingsFrame
     PlayerWindow.Position = defaultPositions.PlayerWindow
 
-    if QuickButtons["TPS"] then QuickButtons["TPS"].Position = defaultPositions.Quick_TPS end
-    if QuickButtons["Invisicam"] then QuickButtons["Invisicam"].Position = defaultPositions.Quick_Invisicam end
-    if QuickButtons["FPXRay"] then QuickButtons["FPXRay"].Position = defaultPositions.Quick_FPXRay end
-    if QuickButtons["ESP"] then QuickButtons["ESP"].Position = defaultPositions.Quick_ESP end
-    if QuickButtons["DeleteMode"] then QuickButtons["DeleteMode"].Position = defaultPositions.Quick_DeleteMode end
-    if QuickButtons["Noclip"] then QuickButtons["Noclip"].Position = defaultPositions.Quick_Noclip end
-    if QuickButtons["InfJump"] then QuickButtons["InfJump"].Position = defaultPositions.Quick_InfJump end
-    if QuickButtons["Fly"] then QuickButtons["Fly"].Position = defaultPositions.Quick_Fly end
-    if QuickButtons["FreeCam"] then QuickButtons["FreeCam"].Position = defaultPositions.Quick_FreeCam end
-    if QuickButtons["Fullbright"] then QuickButtons["Fullbright"].Position = defaultPositions.Quick_Fullbright end
-    if QuickButtons["ThirdPerson"] then QuickButtons["ThirdPerson"].Position = defaultPositions.Quick_ThirdPerson end
-    if QuickButtons["Restore"] then QuickButtons["Restore"].Position = defaultPositions.Quick_Restore end
+    for key, pos in pairs(defaultPositions) do
+        savePosition(key, pos)
+        if string.sub(key, 1, 6) == "Quick_" then
+            local qName = string.sub(key, 7)
+            if QuickButtons[qName] then QuickButtons[qName].Position = pos end
+        end
+    end
 
-    savePosition("MainFrame", defaultPositions.MainFrame)
-    savePosition("MiniBtn", defaultPositions.MiniBtn)
-    savePosition("MiniTpBtn", defaultPositions.MiniTpBtn)
-    savePosition("SettingsFrame", defaultPositions.SettingsFrame)
-    savePosition("PlayerWindow", defaultPositions.PlayerWindow)
-    
-    savePosition("Quick_TPS", defaultPositions.Quick_TPS)
-    savePosition("Quick_Invisicam", defaultPositions.Quick_Invisicam)
-    savePosition("Quick_FPXRay", defaultPositions.Quick_FPXRay)
-    savePosition("Quick_ESP", defaultPositions.Quick_ESP)
-    savePosition("Quick_DeleteMode", defaultPositions.Quick_DeleteMode)
-    savePosition("Quick_Noclip", defaultPositions.Quick_Noclip)
-    savePosition("Quick_InfJump", defaultPositions.Quick_InfJump)
-    savePosition("Quick_Fly", defaultPositions.Quick_Fly)
-    savePosition("Quick_FreeCam", defaultPositions.Quick_FreeCam)
-    savePosition("Quick_Fullbright", defaultPositions.Quick_Fullbright)
-    savePosition("Quick_ThirdPerson", defaultPositions.Quick_ThirdPerson)
-    savePosition("Quick_Restore", defaultPositions.Quick_Restore)
-
-    ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    ResetPositionsBtn.BackgroundColor3 = THEME.AccentGreen
     task.wait(0.3)
-    ResetPositionsBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+    ResetPositionsBtn.BackgroundColor3 = THEME.AccentAmber
 end)
 
--- Configuraciones
+-- ==========================================
+-- CONFIGURACIÓN: VISIBILIDAD DE BOTONES FLOTANTES, SLIDERS Y KEYBINDS
+-- ==========================================
+local function createSectionTitle(titleText)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 18)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = titleText
+    lbl.TextColor3 = THEME.AccentCyan
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 9
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = SettingsScroll
+end
+
 local function createQuickConfig(text, btnName)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 20)
-    container.BackgroundTransparency = 1
-    container.Parent = SettingsScroll
-
-    local bg, knob = createSwitch(container, text)
+    local bg, knob, card, stroke = createNeonSwitch(SettingsScroll, "🔘", text)
     local isEnabled = loadButtonState(btnName)
-    bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+    setSwitchVisual(isEnabled, bg, knob, card, stroke, nil)
 
-    if isEnabled and QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = true end
+    if QuickButtons[btnName] then
+        QuickButtons[btnName].Visible = isEnabled and quickButtonsMaster
+    end
 
     bg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
-            bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-            knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-            if QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = newState end
+            local newState = not (bg.BackgroundColor3 == THEME.AccentGreen)
+            setSwitchVisual(newState, bg, knob, card, stroke, nil)
+            if QuickButtons[btnName] then
+                QuickButtons[btnName].Visible = newState and quickButtonsMaster
+            end
             saveButtonState(btnName, newState)
         end
     end)
 end
 
 local function createSliderSwitch(btnName, switchText, sliderText, minVal, maxVal, defaultVal, callback)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.BackgroundTransparency = 1
-    container.Parent = SettingsScroll
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 54)
+    card.BackgroundColor3 = THEME.BgCard
+    card.BackgroundTransparency = 0.25
+    card.BorderSizePixel = 0
+    card.Parent = SettingsScroll
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
+    local stroke = applyNeonStroke(card, THEME.AccentCyan, 0.78, 1)
 
-    local bg, knob = createSwitch(container, switchText)
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(0.74, 0, 0, 26)
+    titleLbl.Position = UDim2.new(0, 9, 0, 0)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = "🔘  " .. switchText
+    titleLbl.TextColor3 = THEME.TextMain
+    titleLbl.Font = Enum.Font.GothamMedium
+    titleLbl.TextSize = 10
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Parent = card
+
+    local bg = Instance.new("TextButton")
+    bg.Size = UDim2.new(0, 32, 0, 16)
+    bg.Position = UDim2.new(1, -40, 0, 5)
+    bg.BackgroundColor3 = THEME.SwitchOff
+    bg.Text = ""
+    bg.AutoButtonColor = false
+    bg.Parent = card
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 12, 0, 12)
+    knob.Position = UDim2.new(0, 2, 0.5, -6)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.Parent = bg
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
     local isEnabled = loadButtonState(btnName)
-    bg.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-    knob.Position = isEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-    if isEnabled and QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = true end
+    setSwitchVisual(isEnabled, bg, knob, card, stroke, nil)
+    if QuickButtons[btnName] then
+        QuickButtons[btnName].Visible = isEnabled and quickButtonsMaster
+    end
 
     bg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local newState = not (bg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
-            bg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-            knob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-            if QuickButtons[btnName] and quickButtonsMaster then QuickButtons[btnName].Visible = newState end
+            local newState = not (bg.BackgroundColor3 == THEME.AccentGreen)
+            setSwitchVisual(newState, bg, knob, card, stroke, nil)
+            if QuickButtons[btnName] then
+                QuickButtons[btnName].Visible = newState and quickButtonsMaster
+            end
             saveButtonState(btnName, newState)
         end
     end)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.8, 0, 0, 10)
-    label.Position = UDim2.new(0.1, 0, 0, 22)
+    label.Size = UDim2.new(1, -18, 0, 12)
+    label.Position = UDim2.new(0, 9, 0, 26)
     label.BackgroundTransparency = 1
-    label.Text = sliderText .. " (" .. defaultVal .. ")"
-    label.TextColor3 = Color3.fromRGB(150, 150, 150)
+    label.Text = sliderText .. ": " .. defaultVal
+    label.TextColor3 = THEME.TextMuted
     label.Font = Enum.Font.Gotham
     label.TextSize = 8
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
+    label.Parent = card
 
     local barBg = Instance.new("TextButton")
-    barBg.Size = UDim2.new(0.8, 0, 0, 6)
-    barBg.Position = UDim2.new(0.1, 0, 0, 36)
-    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    barBg.Size = UDim2.new(1, -18, 0, 6)
+    barBg.Position = UDim2.new(0, 9, 0, 41)
+    barBg.BackgroundColor3 = THEME.SwitchOff
     barBg.Text = ""
-    barBg.Parent = container
+    barBg.AutoButtonColor = false
+    barBg.Parent = card
     Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    fill.BackgroundColor3 = THEME.AccentCyan
     fill.Parent = barBg
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
@@ -1268,57 +1341,35 @@ local function createSliderSwitch(btnName, switchText, sliderText, minVal, maxVa
             local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
             fill.Size = UDim2.new(posX, 0, 1, 0)
             local val = math.floor(minVal + (maxVal - minVal) * posX)
-            label.Text = sliderText .. " (" .. val .. ")"
+            label.Text = sliderText .. ": " .. val
             callback(val)
         end
     end)
 end
 
-local ConfigLabel = Instance.new("TextLabel")
-ConfigLabel.Size = UDim2.new(1, 0, 0, 15)
-ConfigLabel.BackgroundTransparency = 1
-ConfigLabel.Text = "--- Botones ---"
-ConfigLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
-ConfigLabel.Font = Enum.Font.GothamBold
-ConfigLabel.TextSize = 9
-ConfigLabel.Parent = SettingsScroll
+createSectionTitle("  MOSTRAR / OCULTAR BOTONES FLOTANTES")
 
 if isTouchDevice then
-    createQuickConfig("TPS", "TPS")
-    task.defer(function() if QuickButtons["TPS"] then QuickButtons["TPS"].Visible = true end end)
+    createQuickConfig("Botón TPS (Toque)", "TPS")
 end
-createQuickConfig("Invisicam", "Invisicam")
-createQuickConfig("FP X-Ray", "FPXRay")
-createQuickConfig("ESP", "ESP")
-createQuickConfig("Borrador", "DeleteMode")
-createQuickConfig("Noclip", "Noclip")
-createQuickConfig("Infinite Jump", "InfJump")
-createSliderSwitch("Fly", "Fly", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
-createSliderSwitch("FreeCam", "Free Cam", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
-createQuickConfig("Fullbright", "Fullbright")
-createQuickConfig("Third Person", "ThirdPerson")
+createQuickConfig("Botón Invisicam (INV)", "Invisicam")
+createQuickConfig("Botón FP X-Ray (XRY)", "FPXRay")
+createQuickConfig("Botón ESP (ESP)", "ESP")
+createQuickConfig("Botón Borrador (DEL)", "DeleteMode")
+createQuickConfig("Botón Noclip (NOC)", "Noclip")
+createQuickConfig("Botón Inf Jump (JMP)", "InfJump")
+createSliderSwitch("Fly", "Botón Fly (FLY)", "Velocidad Fly", 10, 300, 50, function(val) flySpeed = val end)
+createSliderSwitch("FreeCam", "Botón Free Cam (CAM)", "Velocidad Free Cam", 10, 300, 50, function(val) freeCamSpeed = val end)
+createQuickConfig("Botón Fullbright (LGT)", "Fullbright")
+createQuickConfig("Botón Third Person (3PS)", "ThirdPerson")
+createQuickConfig("Botón Restaurar (RST)", "Restore")
 
-local RestoreConfigBg, RestoreConfigKnob = createSwitch(SettingsScroll, "Botón Restaurar")
-local rstEnabled = loadButtonState("Restore")
-RestoreConfigBg.BackgroundColor3 = rstEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-RestoreConfigKnob.Position = rstEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-
-RestoreConfigBg.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local newState = not (RestoreConfigBg.BackgroundColor3 == Color3.fromRGB(0, 200, 100))
-        RestoreConfigBg.BackgroundColor3 = newState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-        RestoreConfigKnob.Position = newState and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
-        if quickButtonsMaster then RestoreQuickBtn.Visible = newState end
-        saveButtonState("Restore", newState)
-    end
-end)
-
+-- Conexión de Switches del Panel Principal
 if isTouchDevice then
     TPSwitchBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             tpEnabled = not tpEnabled
-            TPSwitchBg.BackgroundColor3 = tpEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
-            TPSwitchKnob.Position = tpEnabled and UDim2.new(0, 16, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+            setSwitchVisual(tpEnabled, TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke, "TPS")
         end
     end)
 end
@@ -1334,17 +1385,21 @@ FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enu
 FullbrightSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end end)
 ThirdPersonSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleThirdPerson(not thirdPersonEnabled) end end)
 
+-- Ojo maestro (oculta o restaura todos los botones flotantes activos de golpe)
 MasterQuickBtn.MouseButton1Click:Connect(function()
     quickButtonsMaster = not quickButtonsMaster
-    MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 60)
+    MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and THEME.AccentGreen or THEME.SwitchOff
     for name, btn in pairs(QuickButtons) do
-        if quickButtonsMaster then 
-            btn.Visible = (name == "TPS" and isTouchDevice) or loadButtonState(name)
-        else 
-            btn.Visible = false 
+        if quickButtonsMaster then
+            if name == "TPS" and not isTouchDevice then
+                btn.Visible = false
+            else
+                btn.Visible = loadButtonState(name)
+            end
+        else
+            btn.Visible = false
         end
     end
-    RestoreQuickBtn.Visible = quickButtonsMaster and loadButtonState("Restore")
 end)
 
 MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; MiniBtn.Visible = true end)
@@ -1352,38 +1407,46 @@ MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible =
 SettingsBtn.Activated:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
 CloseSettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = false end)
 
+-- Atajos de Teclado (PC)
+createSectionTitle("  ATAJOS DE TECLADO (PC)")
+
 local function createKeybindBox(text, keyName)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 20)
-    container.BackgroundTransparency = 1
-    container.Parent = SettingsScroll
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 24)
+    card.BackgroundColor3 = THEME.BgCard
+    card.BackgroundTransparency = 0.25
+    card.Parent = SettingsScroll
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 6)
+    applyNeonStroke(card, THEME.AccentCyan, 0.82, 1)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.6, 0, 1, 0)
-    label.Position = UDim2.new(0.1, 0, 0, 0)
+    label.Size = UDim2.new(0.65, 0, 1, 0)
+    label.Position = UDim2.new(0, 9, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextColor3 = THEME.TextMain
     label.Font = Enum.Font.Gotham
     label.TextSize = 9
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
+    label.Parent = card
 
     local box = Instance.new("TextButton")
-    box.Size = UDim2.new(0.25, 0, 1, 0)
-    box.Position = UDim2.new(0.65, 0, 0, 0)
-    box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    box.Size = UDim2.new(0, 44, 0, 18)
+    box.Position = UDim2.new(1, -50, 0.5, -9)
+    box.BackgroundColor3 = THEME.BgHeader
     box.Text = keybinds[keyName].Name
-    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextColor3 = THEME.AccentCyan
     box.Font = Enum.Font.GothamBold
-    box.TextSize = 9
-    box.Parent = container
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 3)
+    box.TextSize = 8
+    box.Parent = card
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
+    applyNeonStroke(box, THEME.AccentCyan, 0.5, 1)
 
     box.MouseButton1Click:Connect(function()
         if listeningFor then return end
         box.Text = "..."
-        box.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
+        box.BackgroundColor3 = THEME.AccentAmber
+        box.TextColor3 = THEME.TextMain
         listeningFor = keyName
         local connection
         connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1392,7 +1455,8 @@ local function createKeybindBox(text, keyName)
                 keybinds[keyName] = input.KeyCode
                 saveKeybind(keyName, input.KeyCode)
                 box.Text = input.KeyCode.Name
-                box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                box.BackgroundColor3 = THEME.BgHeader
+                box.TextColor3 = THEME.AccentCyan
                 listeningFor = nil
                 connection:Disconnect()
             end
@@ -1412,6 +1476,7 @@ createKeybindBox("Tecla Inf Jump", "InfJump")
 createKeybindBox("Tecla Borrador", "Delete")
 createKeybindBox("Tecla Restaurar", "Restore")
 
+-- Raycast y Controles
 local function raycastIgnoringDeleted(origin, direction)
     local filter = {LocalPlayer.Character, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
