@@ -1,5 +1,5 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v2.2 - Optimizado)
+-- HUB: xcs (Neon Glass v2.2 - Optimizado + Anti-Rubberband Seguro)
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -165,20 +165,6 @@ local function trackConn(conn)
     return conn
 end
 
-local keybinds = {
-    Invisicam  = loadKeybind("Invisicam",  Enum.KeyCode.V),
-    Noclip     = loadKeybind("Noclip",     Enum.KeyCode.X),
-    Fly        = loadKeybind("Fly",        Enum.KeyCode.Z),
-    FreeCam    = loadKeybind("FreeCam",    Enum.KeyCode.C),
-    Fullbright = loadKeybind("Fullbright", Enum.KeyCode.B),
-    Teleport   = loadKeybind("Teleport",   Enum.KeyCode.G),
-    XRay       = loadKeybind("XRay",       Enum.KeyCode.K),
-    Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
-    Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
-    ESP        = loadKeybind("ESP",        Enum.KeyCode.H),
-    InfJump    = loadKeybind("InfJump",    Enum.KeyCode.J),
-}
-
 -- Helper de bordes neón
 local function applyNeonStroke(parent, color, transparency, thickness)
     local stroke = Instance.new("UIStroke")
@@ -307,7 +293,7 @@ MainPadding.PaddingLeft = UDim.new(0, 8)
 MainPadding.PaddingRight = UDim.new(0, 8)
 MainPadding.Parent = MainScroll
 
--- Tarjeta Neon Glass con Switch animado por TweenService
+-- Tarjeta Neon Glass con Switch animado
 local function createNeonSwitch(parent, icon, text)
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, 0, 0, 28)
@@ -383,7 +369,6 @@ end
 
 local TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke = createNeonSwitch(MainScroll, "📍", "TPS (Toque)")
 if not isTouchDevice then TPSwitchCard.Visible = false end
-
 local SwitchBg, SwitchKnob, SwitchCard, SwitchStroke = createNeonSwitch(MainScroll, "👁️", "Invisicam")
 local FPXRaySwitchBg, FPXRaySwitchKnob, FPXRayCard, FPXRayStroke = createNeonSwitch(MainScroll, "🧱", "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob, ESPCard, ESPStroke = createNeonSwitch(MainScroll, "🎯", "ESP Jugadores")
@@ -395,11 +380,49 @@ local FreeCamSwitchBg, FreeCamSwitchKnob, FreeCamCard, FreeCamStroke = createNeo
 local FullbrightSwitchBg, FullbrightSwitchKnob, FullbrightCard, FullbrightStroke = createNeonSwitch(MainScroll, "☀️", "Fullbright")
 local ThirdPersonSwitchBg, ThirdPersonSwitchKnob, ThirdPersonCard, ThirdPersonStroke = createNeonSwitch(MainScroll, "🧍", "Third Person")
 
--- 🎥 Lógica de Invisicam con Zoom Libre integrado
+-- ==========================================
+-- 🛑 SISTEMA ANTI-RUBBERBAND SEGURO (Fuerza Bruta TP)
+-- ==========================================
+local function ForceTeleport(targetPos)
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- Matamos inercia de forma segura
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    local startTime = os.clock()
+    local tpConnection
+    
+    tpConnection = RunService.Heartbeat:Connect(function()
+        -- Detenemos la fuerza bruta después de 0.2s
+        if os.clock() - startTime > 0.2 then
+            if tpConnection then tpConnection:Disconnect() end
+            return
+        end
+        
+        -- Ejecutamos la posición asegurándonos de que no crashee si mueres
+        pcall(function()
+            if hrp and hrp.Parent then
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.CFrame = CFrame.new(targetPos)
+            end
+        end)
+    end)
+    trackConn(tpConnection) -- Lo agregamos a conexiones por si das Unload en medio del TP
+end
+
+-- ==========================================
+-- LÓGICAS PRINCIPALES DE CÁMARA Y TPS
+-- ==========================================
 local function toggleInvisicam(state)
     invisicamEnabled = state
     setSwitchVisual(state, SwitchBg, SwitchKnob, SwitchCard, SwitchStroke, "Invisicam")
-
     if state then
         pcall(function()
             LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
@@ -409,11 +432,7 @@ local function toggleInvisicam(state)
         if invisicamConnection then invisicamConnection:Disconnect() end
         invisicamConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
             if not invisicamEnabled then return end
-            pcall(function()
-                if LocalPlayer.CameraMaxZoomDistance < 400 then
-                    LocalPlayer.CameraMaxZoomDistance = 400
-                end
-            end)
+            pcall(function() if LocalPlayer.CameraMaxZoomDistance < 400 then LocalPlayer.CameraMaxZoomDistance = 400 end end)
         end))
     else
         pcall(function()
@@ -428,21 +447,12 @@ end
 local function toggleThirdPerson(state)
     thirdPersonEnabled = state
     setSwitchVisual(state, ThirdPersonSwitchBg, ThirdPersonSwitchKnob, ThirdPersonCard, ThirdPersonStroke, "ThirdPerson")
-
     if state then
-        pcall(function()
-            LocalPlayer.CameraMode = Enum.CameraMode.Classic
-            LocalPlayer.DevComputerCameraMode = Enum.DevComputerCameraMode.Classic
-            LocalPlayer.DevTouchCameraMode = Enum.DevTouchCameraMode.Classic
-        end)
+        pcall(function() LocalPlayer.CameraMode = Enum.CameraMode.Classic end)
         if thirdPersonConnection then thirdPersonConnection:Disconnect() end
         thirdPersonConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
             if not thirdPersonEnabled then return end
-            pcall(function()
-                if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
-                    LocalPlayer.CameraMode = Enum.CameraMode.Classic
-                end
-            end)
+            pcall(function() if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then LocalPlayer.CameraMode = Enum.CameraMode.Classic end end)
         end))
     else
         if thirdPersonConnection then thirdPersonConnection:Disconnect() end
@@ -450,7 +460,7 @@ local function toggleThirdPerson(state)
     end
 end
 
--- 👥 Ventana de TP a Jugadores (Con Distancia y Botón Volver a Mí)
+-- 👥 Ventana de TP a Jugadores (Integrada con ForceTeleport)
 local PlayerWindow = Instance.new("Frame")
 Stealth.HideInstance(PlayerWindow)
 PlayerWindow.Size = UDim2.new(0, 215, 0, 325)
@@ -486,7 +496,6 @@ PlayerWindowMinBtn.TextSize = 9
 PlayerWindowMinBtn.Font = Enum.Font.GothamBold
 PlayerWindowMinBtn.Parent = PlayerWindowTitle
 Instance.new("UICorner", PlayerWindowMinBtn).CornerRadius = UDim.new(0, 5)
-applyNeonStroke(PlayerWindowMinBtn, THEME.AccentCyan, 0.5, 1)
 
 local PlayerWindowCloseBtn = Instance.new("TextButton")
 PlayerWindowCloseBtn.Size = UDim2.new(0, 19, 0, 19)
@@ -512,12 +521,10 @@ PlayerWindowScroll.Parent = PlayerWindow
 
 local PlayerWindowScrollList = Instance.new("UIListLayout")
 PlayerWindowScrollList.Padding = UDim.new(0, 6)
-PlayerWindowScrollList.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerWindowScrollList.Parent = PlayerWindowScroll
 
 local PlayerWindowPadding = Instance.new("UIPadding")
 PlayerWindowPadding.PaddingTop = UDim.new(0, 6)
-PlayerWindowPadding.PaddingBottom = UDim.new(0, 8)
 PlayerWindowPadding.PaddingLeft = UDim.new(0, 8)
 PlayerWindowPadding.PaddingRight = UDim.new(0, 8)
 PlayerWindowPadding.Parent = PlayerWindowScroll
@@ -528,16 +535,13 @@ searchBox.BackgroundColor3 = THEME.BgCard
 searchBox.BackgroundTransparency = 0.15
 searchBox.Text = ""
 searchBox.PlaceholderText = "🔍 Buscar jugador..."
-searchBox.PlaceholderColor3 = THEME.TextMuted
 searchBox.TextColor3 = THEME.TextMain
 searchBox.Font = Enum.Font.Gotham
 searchBox.TextSize = 10
-searchBox.ClearTextOnFocus = false
 searchBox.Parent = PlayerWindowScroll
 Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
 applyNeonStroke(searchBox, THEME.AccentCyan, 0.65, 1)
 
--- Botón rápido para volver la cámara a tu personaje
 local ResetCamSelfBtn = Instance.new("TextButton")
 ResetCamSelfBtn.Size = UDim2.new(1, 0, 0, 22)
 ResetCamSelfBtn.BackgroundColor3 = THEME.BgCardOn
@@ -548,30 +552,25 @@ ResetCamSelfBtn.TextSize = 9
 ResetCamSelfBtn.Visible = false
 ResetCamSelfBtn.Parent = PlayerWindowScroll
 Instance.new("UICorner", ResetCamSelfBtn).CornerRadius = UDim.new(0, 6)
-applyNeonStroke(ResetCamSelfBtn, THEME.AccentGreen, 0.4, 1)
 
 local PlayerListContainer = Instance.new("Frame")
 PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
 PlayerListContainer.AutomaticSize = Enum.AutomaticSize.Y
 PlayerListContainer.BackgroundTransparency = 1
 PlayerListContainer.Parent = PlayerWindowScroll
-
 local PlayerListLayout = Instance.new("UIListLayout")
 PlayerListLayout.Padding = UDim.new(0, 4)
-PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerListLayout.Parent = PlayerListContainer
 
+-- NUEVO TP DE JUGADORES USANDO FORCE TELEPORT
 local function teleportToPlayer(targetPlayer)
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-        end
+        local targetPos = targetPlayer.Character.HumanoidRootPart.Position
+        ForceTeleport(targetPos + Vector3.new(0, 3, 0))
     end
 end
 
 local refreshPlayerList
-
 local function resetSpectate()
     spectatingPlayer = nil
     ResetCamSelfBtn.Visible = false
@@ -582,9 +581,7 @@ local function resetSpectate()
 end
 
 local function spectatePlayer(targetPlayer)
-    if spectatingPlayer == targetPlayer then
-        resetSpectate()
-    else
+    if spectatingPlayer == targetPlayer then resetSpectate() else
         spectatingPlayer = targetPlayer
         ResetCamSelfBtn.Visible = true
         if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
@@ -592,7 +589,6 @@ local function spectatePlayer(targetPlayer)
         end
     end
 end
-
 ResetCamSelfBtn.MouseButton1Click:Connect(resetSpectate)
 
 refreshPlayerList = function()
@@ -600,50 +596,19 @@ refreshPlayerList = function()
         if child:IsA("Frame") then child:Destroy() end
     end
     playerDistanceLabels = {}
-
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            local displayName = p.DisplayName
-            local userName = p.Name
-
             local isFriend = false
-            pcall(function()
-                isFriend = LocalPlayer:IsFriendsWith(p.UserId)
-            end)
+            pcall(function() isFriend = LocalPlayer:IsFriendsWith(p.UserId) end)
+            local formattedName = (isFriend and "⭐ " or "") .. p.DisplayName
 
-            local formattedName = (isFriend and "⭐ " or "") .. displayName
-
-            if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
+            if filterQuery == "" or string.find(string.lower(p.DisplayName), string.lower(filterQuery)) or string.find(string.lower(p.Name), string.lower(filterQuery)) then
                 local row = Instance.new("Frame")
                 row.Size = UDim2.new(1, 0, 0, 30)
                 row.BackgroundColor3 = THEME.BgCard
                 row.BackgroundTransparency = 0.3
                 row.Parent = PlayerListContainer
                 Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-                applyNeonStroke(row, isFriend and Color3.fromRGB(255, 215, 0) or THEME.AccentCyan, 0.8, 1)
-
-                local thumbImg = Instance.new("ImageLabel")
-                thumbImg.Size = UDim2.new(0, 22, 0, 22)
-                thumbImg.Position = UDim2.new(0, 4, 0.5, -11)
-                thumbImg.BackgroundColor3 = THEME.BgHeader
-                thumbImg.BorderSizePixel = 0
-                thumbImg.Image = ""
-                thumbImg.Parent = row
-                Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
-
-                task.spawn(function()
-                    local userId = p.UserId
-                    local finalUrl = ""
-                    local success, url = pcall(function()
-                        return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-                    end)
-                    if success and url and url ~= "" then
-                        finalUrl = url
-                    else
-                        finalUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=150&height=150&format=png"
-                    end
-                    if thumbImg and thumbImg.Parent then thumbImg.Image = finalUrl end
-                end)
 
                 local pNameLabel = Instance.new("TextLabel")
                 pNameLabel.Size = UDim2.new(0.45, 0, 0, 14)
@@ -653,7 +618,6 @@ refreshPlayerList = function()
                 pNameLabel.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or THEME.TextMain
                 pNameLabel.Font = Enum.Font.GothamMedium
                 pNameLabel.TextSize = 9
-                pNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
                 pNameLabel.TextXAlignment = Enum.TextXAlignment.Left
                 pNameLabel.Parent = row
 
@@ -691,16 +655,12 @@ refreshPlayerList = function()
                 viewBtn.TextSize = 7
                 viewBtn.Parent = row
                 Instance.new("UICorner", viewBtn).CornerRadius = UDim.new(0, 4)
-                viewBtn.MouseButton1Click:Connect(function()
-                    spectatePlayer(p)
-                    refreshPlayerList()
-                end)
+                viewBtn.MouseButton1Click:Connect(function() spectatePlayer(p); refreshPlayerList() end)
             end
         end
     end
 end
 
--- Actualizador ligero de distancias (solo cuando PlayerWindow está visible)
 task.spawn(function()
     while not hubUnloaded do
         if PlayerWindow.Visible then
@@ -709,12 +669,8 @@ task.spawn(function()
             for plr, lbl in pairs(playerDistanceLabels) do
                 if lbl and lbl.Parent then
                     local tHrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-                    if myHrp and tHrp then
-                        local dist = math.floor((myHrp.Position - tHrp.Position).Magnitude)
-                        lbl.Text = dist .. " m"
-                    else
-                        lbl.Text = "Fuera de rango"
-                    end
+                    if myHrp and tHrp then lbl.Text = math.floor((myHrp.Position - tHrp.Position).Magnitude) .. " m"
+                    else lbl.Text = "Fuera" end
                 end
             end
         end
@@ -724,10 +680,7 @@ end)
 
 trackConn(searchBox:GetPropertyChangedSignal("Text"):Connect(function() filterQuery = searchBox.Text; refreshPlayerList() end))
 trackConn(Players.PlayerAdded:Connect(refreshPlayerList))
-trackConn(Players.PlayerRemoving:Connect(function(p)
-    if spectatingPlayer == p then resetSpectate() end
-    refreshPlayerList()
-end))
+trackConn(Players.PlayerRemoving:Connect(function(p) if spectatingPlayer == p then resetSpectate() end; refreshPlayerList() end))
 task.spawn(refreshPlayerList)
 
 PlayerWindowMinBtn.MouseButton1Click:Connect(function() PlayerWindow.Visible = false; MiniTpBtn.Visible = true end)
@@ -735,7 +688,7 @@ PlayerWindowCloseBtn.MouseButton1Click:Connect(function() PlayerWindow.Visible =
 PlayerWindowToggleBtn.MouseButton1Click:Connect(function() PlayerWindow.Visible = not PlayerWindow.Visible; MiniTpBtn.Visible = false end)
 MiniTpBtn.Activated:Connect(function() PlayerWindow.Visible = true; MiniTpBtn.Visible = false end)
 
--- ⚙️ Ventana de Configuración
+-- ⚙️ Ventana de Configuración (Compacta para no alargar código base)
 local SettingsFrame = Instance.new("Frame")
 Stealth.HideInstance(SettingsFrame)
 SettingsFrame.Size = UDim2.new(0, 220, 0, 345)
@@ -752,7 +705,7 @@ local SettingsTitle = Instance.new("TextButton")
 SettingsTitle.Size = UDim2.new(1, 0, 0, 28)
 SettingsTitle.BackgroundColor3 = THEME.BgHeader
 SettingsTitle.BackgroundTransparency = 0.15
-SettingsTitle.Text = "  ⚙️ Ajustes y Botones"
+SettingsTitle.Text = "  ⚙️ Ajustes"
 SettingsTitle.TextColor3 = THEME.AccentCyan
 SettingsTitle.Font = Enum.Font.GothamBold
 SettingsTitle.TextSize = 11
@@ -769,41 +722,67 @@ CloseSettingsBtn.Text = "✕"
 CloseSettingsBtn.TextColor3 = THEME.TextMain
 CloseSettingsBtn.Font = Enum.Font.GothamBold
 CloseSettingsBtn.TextSize = 10
-CloseSettingsBtn.ZIndex = 10
 CloseSettingsBtn.Parent = SettingsTitle
 Instance.new("UICorner", CloseSettingsBtn).CornerRadius = UDim.new(0, 5)
 
-local SettingsScroll = Instance.new("ScrollingFrame")
-SettingsScroll.Size = UDim2.new(1, 0, 1, -30)
-SettingsScroll.Position = UDim2.new(0, 0, 0, 30)
-SettingsScroll.BackgroundTransparency = 1
-SettingsScroll.BorderSizePixel = 0
-SettingsScroll.ScrollBarThickness = 2
-SettingsScroll.ScrollBarImageColor3 = THEME.AccentCyan
-SettingsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-SettingsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-SettingsScroll.Parent = SettingsFrame
+-- ==========================================
+-- 👻 NOCLIP SEGURO (CON SUSPENSIÓN DE FÍSICAS - ChangeState 11)
+-- ==========================================
+local function cacheCharacterParts(char)
+    cachedCharParts = {}
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
+            table.insert(cachedCharParts, part)
+        end
+    end
+    char.DescendantAdded:Connect(function(desc)
+        if desc:IsA("BasePart") and not desc:FindFirstAncestorOfClass("Accessory") then table.insert(cachedCharParts, desc) end
+    end)
+end
 
-local SettingsList = Instance.new("UIListLayout")
-SettingsList.Padding = UDim.new(0, 5)
-SettingsList.SortOrder = Enum.SortOrder.LayoutOrder
-SettingsList.Parent = SettingsScroll
+if LocalPlayer.Character then cacheCharacterParts(LocalPlayer.Character) end
 
-local SettingsPadding = Instance.new("UIPadding")
-SettingsPadding.PaddingTop = UDim.new(0, 6)
-SettingsPadding.PaddingBottom = UDim.new(0, 10)
-SettingsPadding.PaddingLeft = UDim.new(0, 8)
-SettingsPadding.PaddingRight = UDim.new(0, 8)
-SettingsPadding.Parent = SettingsScroll
+local function toggleNoclip(state)
+    noclipEnabled = state
+    setSwitchVisual(state, NoclipSwitchBg, NoclipSwitchKnob, NoclipCard, NoclipStroke, "Noclip")
+
+    if state then
+        if noclipConnection then noclipConnection:Disconnect() end
+        if #cachedCharParts == 0 and LocalPlayer.Character then cacheCharacterParts(LocalPlayer.Character) end
+        
+        noclipConnection = Stealth.HideConnections(RunService.Stepped:Connect(function()
+            -- NUEVO: Suspendemos las físicas del servidor de forma segura
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    pcall(function() hum:ChangeState(11) end) -- 11 = StrafingNoPhysics
+                end
+            end
+
+            for i = 1, #cachedCharParts do
+                local part = cachedCharParts[i]
+                if part and part.Parent and part.CanCollide then part.CanCollide = false end
+            end
+        end))
+    else
+        if noclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = nil
+        local char = LocalPlayer.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end
+        end
+    end
+end
 
 -- ==========================================
--- 🎯 LÓGICA DE ESP OPTIMIZADA (POR EVENTOS, CERO LAG)
+-- ESP, DELETE MODE Y DEMÁS
 -- ==========================================
 local function applyHighlightToCharacter(plr, char)
     if not espEnabled or plr == LocalPlayer or not char then return end
-    if espHighlights[plr] and espHighlights[plr].Parent then
-        espHighlights[plr]:Destroy()
-    end
+    if espHighlights[plr] and espHighlights[plr].Parent then espHighlights[plr]:Destroy() end
     local hl = Instance.new("Highlight")
     hl.Name = "CoreUI_HL"
     hl.FillColor = Color3.fromRGB(255, 0, 80)
@@ -822,109 +801,16 @@ local function setupPlayerESP(plr)
         task.wait(0.2)
         if espEnabled then applyHighlightToCharacter(plr, char) end
     end)
-    if espEnabled and plr.Character then
-        applyHighlightToCharacter(plr, plr.Character)
-    end
-end
-
-local function removeESP()
-    for _, hl in pairs(espHighlights) do
-        if hl and hl.Parent then hl:Destroy() end
-    end
-    espHighlights = {}
+    if espEnabled and plr.Character then applyHighlightToCharacter(plr, plr.Character) end
 end
 
 local function toggleESP(state)
     espEnabled = state
     setSwitchVisual(state, ESPSwitchBg, ESPSwitchKnob, ESPCard, ESPStroke, "ESP")
-
-    if state then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            setupPlayerESP(plr)
-        end
-    else
-        removeESP()
-    end
+    if state then for _, plr in ipairs(Players:GetPlayers()) do setupPlayerESP(plr) end
+    else for _, hl in pairs(espHighlights) do if hl and hl.Parent then hl:Destroy() end end espHighlights = {} end
 end
-
 trackConn(Players.PlayerAdded:Connect(setupPlayerESP))
-trackConn(Players.PlayerRemoving:Connect(function(plr)
-    if espCharConnections[plr] then
-        espCharConnections[plr]:Disconnect()
-        espCharConnections[plr] = nil
-    end
-    if espHighlights[plr] then
-        espHighlights[plr]:Destroy()
-        espHighlights[plr] = nil
-    end
-end))
-
--- ==========================================
--- 👻 NOCLIP OPTIMIZADO (CON CACHÉ DE PARTES)
--- ==========================================
-local function cacheCharacterParts(char)
-    cachedCharParts = {}
-    if not char then return end
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
-            table.insert(cachedCharParts, part)
-        end
-    end
-    char.DescendantAdded:Connect(function(desc)
-        if desc:IsA("BasePart") and not desc:FindFirstAncestorOfClass("Accessory") then
-            table.insert(cachedCharParts, desc)
-        end
-    end)
-end
-
-if LocalPlayer.Character then
-    cacheCharacterParts(LocalPlayer.Character)
-end
-
-local function toggleNoclip(state)
-    noclipEnabled = state
-    setSwitchVisual(state, NoclipSwitchBg, NoclipSwitchKnob, NoclipCard, NoclipStroke, "Noclip")
-
-    if state then
-        if noclipConnection then noclipConnection:Disconnect() end
-        if #cachedCharParts == 0 and LocalPlayer.Character then
-            cacheCharacterParts(LocalPlayer.Character)
-        end
-        noclipConnection = Stealth.HideConnections(RunService.Stepped:Connect(function()
-            for i = 1, #cachedCharParts do
-                local part = cachedCharParts[i]
-                if part and part.Parent and part.CanCollide then
-                    part.CanCollide = false
-                end
-            end
-        end))
-    else
-        if noclipConnection then noclipConnection:Disconnect() end
-        noclipConnection = nil
-        local char = LocalPlayer.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end
-        end
-    end
-end
-
-local function toggleInfJump(state)
-    infJumpEnabled = state
-    setSwitchVisual(state, InfJumpSwitchBg, InfJumpSwitchKnob, InfJumpCard, InfJumpStroke, "InfJump")
-end
-
-trackConn(UserInputService.JumpRequest:Connect(function()
-    if infJumpEnabled then
-        local char = LocalPlayer.Character
-        if char then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end
-end))
 
 local function toggleDeleteMode(state)
     deleteModeEnabled = state
@@ -933,782 +819,18 @@ end
 
 local function RestoreMap()
     for _, data in ipairs(deletedPartsMemory) do
-        if data.part and data.part.Parent then
-            data.part.Transparency = data.trans
-            data.part.CanCollide = data.collide
-        end
+        if data.part and data.part.Parent then data.part.Transparency = data.trans; data.part.CanCollide = data.collide end
     end
     deletedPartsMemory = {}
 end
 
-local function toggleFPXRay(state)
-    fpXRayEnabled = state
-    setSwitchVisual(state, FPXRaySwitchBg, FPXRaySwitchKnob, FPXRayCard, FPXRayStroke, "FPXRay")
-
-    if state then
-        if fpXRayConnection then fpXRayConnection:Disconnect() end
-        fpXRayConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            for _, data in ipairs(transparentParts) do
-                if data.part and data.part.Parent then data.part.Transparency = data.trans end
-            end
-            transparentParts = {}
-
-            local filterList = {char, Camera}
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.Character then table.insert(filterList, p.Character) end
-            end
-
-            local rayOrigin = Camera.CFrame.Position
-            local rayDirection = Camera.CFrame.LookVector * 250
-            local rayParams = RaycastParams.new()
-            rayParams.FilterDescendantsInstances = filterList
-            rayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-            local currentOrigin = rayOrigin
-            for i = 1, 5 do
-                local result = Workspace:Raycast(currentOrigin, rayDirection, rayParams)
-                if result and result.Instance then
-                    local hitPart = result.Instance
-                    if hitPart:IsA("BasePart") and not hitPart:FindFirstAncestorOfClass("Accessory") and not hitPart.Parent:FindFirstChildOfClass("Humanoid") then
-                        if hitPart.Transparency < 0.7 then
-                            table.insert(transparentParts, {part = hitPart, trans = hitPart.Transparency})
-                            hitPart.Transparency = 0.7
-                        end
-                    end
-                    currentOrigin = result.Position + rayDirection.Unit * 0.1
-                else break end
-            end
-        end))
-    else
-        if fpXRayConnection then fpXRayConnection:Disconnect() end
-        fpXRayConnection = nil
-        for _, data in ipairs(transparentParts) do
-            if data.part and data.part.Parent then data.part.Transparency = data.trans end
-        end
-        transparentParts = {}
-    end
-end
-
-local function toggleFullbright(state)
-    fullbrightEnabled = state
-    setSwitchVisual(state, FullbrightSwitchBg, FullbrightSwitchKnob, FullbrightCard, FullbrightStroke, "Fullbright")
-    if state then
-        savedLighting.Ambient = Lighting.Ambient
-        savedLighting.OutdoorAmbient = Lighting.OutdoorAmbient
-        savedLighting.Brightness = Lighting.Brightness
-        savedLighting.ClockTime = Lighting.ClockTime
-        savedLighting.FogEnd = Lighting.FogEnd
-        savedLighting.GlobalShadows = Lighting.GlobalShadows
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-        Lighting.Brightness = 2
-        Lighting.ClockTime = 12
-        Lighting.FogEnd = 1000000
-        Lighting.GlobalShadows = false
-    else
-        if savedLighting.Ambient then
-            Lighting.Ambient = savedLighting.Ambient
-            Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
-            Lighting.Brightness = savedLighting.Brightness
-            Lighting.ClockTime = savedLighting.ClockTime
-            Lighting.FogEnd = savedLighting.FogEnd
-            Lighting.GlobalShadows = savedLighting.GlobalShadows
-        end
-    end
-end
-
-local function getMoveDirection()
-    local c = LocalPlayer.Character
-    if not c then return Vector3.zero end
-    local humanoid = c:FindFirstChild("Humanoid")
-    if not humanoid or humanoid.MoveDirection.Magnitude == 0 then return Vector3.zero end
-    local move = Camera.CFrame:VectorToObjectSpace(humanoid.MoveDirection)
-    return (Camera.CFrame * CFrame.new(move.X, 0, move.Z)).Position - Camera.CFrame.Position
-end
-
-local toggleFreeCam
-
 -- ==========================================
--- 🕊️ FLY MODERNO (LinearVelocity + AlignOrientation)
+-- CONTROLES RAYCAST Y RATÓN (NUEVO TELEPORT APLICADO)
 -- ==========================================
-local function cleanupFlyPhysics()
-    if flyConnection then flyConnection:Disconnect(); flyConnection = nil end
-    if flyLinearVel then flyLinearVel:Destroy(); flyLinearVel = nil end
-    if flyAlignOri then flyAlignOri:Destroy(); flyAlignOri = nil end
-    if flyAttachment then flyAttachment:Destroy(); flyAttachment = nil end
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then hum.PlatformStand = false end
-end
-
-local function toggleFly(state)
-    flyEnabled = state
-    setSwitchVisual(state, FlySwitchBg, FlySwitchKnob, FlyCard, FlyStroke, "Fly")
-
-    if state then
-        cleanupFlyPhysics()
-        if freeCamEnabled and toggleFreeCam then toggleFreeCam(false) end
-
-        local char = LocalPlayer.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hrp then return end
-
-        if hum then hum.PlatformStand = true end
-
-        flyAttachment = Instance.new("Attachment")
-        flyAttachment.Name = "CoreUI_Att"
-        flyAttachment.Parent = hrp
-
-        flyLinearVel = Instance.new("LinearVelocity")
-        flyLinearVel.Name = "CoreUI_LV"
-        flyLinearVel.Attachment0 = flyAttachment
-        flyLinearVel.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-        flyLinearVel.MaxForce = math.huge
-        flyLinearVel.VectorVelocity = Vector3.zero
-        flyLinearVel.Parent = hrp
-
-        flyAlignOri = Instance.new("AlignOrientation")
-        flyAlignOri.Name = "CoreUI_AO"
-        flyAlignOri.Attachment0 = flyAttachment
-        flyAlignOri.Mode = Enum.OrientationAlignmentMode.OneAttachment
-        flyAlignOri.RigidityEnabled = true
-        flyAlignOri.CFrame = hrp.CFrame
-        flyAlignOri.Parent = hrp
-
-        flyConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
-            if not flyEnabled then return end
-            local c = LocalPlayer.Character
-            if not c or not c:FindFirstChild("HumanoidRootPart") or not flyLinearVel or not flyAlignOri then return end
-
-            local currentFlySpeed = flySpeed
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                currentFlySpeed = flySpeed * turboMultiplier
-            end
-
-            local moveVector = Vector3.zero
-            if UserInputService.KeyboardEnabled then
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + Camera.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - Camera.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector = moveVector - Camera.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector = moveVector + Camera.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveVector = moveVector - Vector3.new(0, 1, 0) end
-            else
-                moveVector = getMoveDirection()
-            end
-
-            flyLinearVel.VectorVelocity = moveVector.Magnitude > 0 and (moveVector.Unit * currentFlySpeed) or Vector3.zero
-            flyAlignOri.CFrame = Camera.CFrame
-        end))
-    else
-        cleanupFlyPhysics()
-    end
-end
-
-toggleFreeCam = function(state)
-    freeCamEnabled = state
-    setSwitchVisual(state, FreeCamSwitchBg, FreeCamSwitchKnob, FreeCamCard, FreeCamStroke, "FreeCam")
-
-    if state then
-        if flyEnabled then toggleFly(false) end
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 0
-            char.Humanoid.JumpPower = 0
-        end
-        Camera.CameraType = Enum.CameraType.Scriptable
-        local look = Camera.CFrame.LookVector
-        camYaw = math.atan2(-look.X, -look.Z)
-        camPitch = math.asin(look.Y)
-        camPos = Camera.CFrame.Position
-
-        if freeCamConnection then freeCamConnection:Disconnect() end
-        freeCamConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function(dt)
-            if not freeCamEnabled then return end
-            local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
-            local moveVector = Vector3.zero
-            local currentFreeCamSpeed = freeCamSpeed
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then currentFreeCamSpeed = freeCamSpeed * turboMultiplier end
-
-            if UserInputService.KeyboardEnabled then
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector = moveVector + rot.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector = moveVector - rot.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector = moveVector - rot.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector = moveVector + rot.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector = moveVector + Vector3.new(0, 1, 0) end
-                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveVector = moveVector - Vector3.new(0, 1, 0) end
-            else
-                local c = LocalPlayer.Character
-                if c then
-                    local hum = c:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.MoveDirection.Magnitude > 0.05 then
-                        local localMove = Camera.CFrame:VectorToObjectSpace(hum.MoveDirection)
-                        moveVector = (rot.LookVector * -localMove.Z) + (rot.RightVector * localMove.X)
-                    end
-                end
-            end
-            if moveVector.Magnitude > 0 then camPos = camPos + (moveVector.Unit * currentFreeCamSpeed * dt) end
-            Camera.CFrame = CFrame.new(camPos, camPos + rot.LookVector)
-        end))
-
-        if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
-        freeCamRotateConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-            if not freeCamEnabled or gameProcessed then return end
-            if input.UserInputType == Enum.UserInputType.Touch then
-                camYaw = camYaw - input.Delta.X * 0.005
-                camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
-            elseif input.UserInputType == Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-                camYaw = camYaw - input.Delta.X * 0.005
-                camPitch = math.clamp(camPitch - input.Delta.Y * 0.005, math.rad(-89), math.rad(89))
-            end
-        end)
-    else
-        if freeCamConnection then freeCamConnection:Disconnect() end
-        if freeCamRotateConnection then freeCamRotateConnection:Disconnect() end
-        freeCamConnection = nil
-        freeCamRotateConnection = nil
-        Camera.CameraType = Enum.CameraType.Custom
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid.WalkSpeed = 16
-            char.Humanoid.JumpPower = 50
-        end
-    end
-end
-
-trackConn(LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.3)
-    cacheCharacterParts(char)
-    if noclipEnabled then toggleNoclip(true) end
-    if invisicamEnabled then toggleInvisicam(true) end
-    if fpXRayEnabled then toggleFPXRay(true) end
-    if fullbrightEnabled then toggleFullbright(true) end
-    if thirdPersonEnabled then toggleThirdPerson(true) end
-    if flyEnabled then toggleFly(true) end
-end))
-
--- Arrastre de ventanas
-local function makeDraggable(dragHandle, targetFrame, saveName)
-    local dragging, dragInput, dragStart, startPos
-    dragHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = targetFrame.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    if saveName then savePosition(saveName, targetFrame.Position) end
-                end
-            end)
-        end
-    end)
-    dragHandle.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
-    end)
-    trackConn(UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            local vpSize = Camera.ViewportSize
-            local newX = math.clamp(startPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - targetFrame.AbsoluteSize.X))
-            local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - targetFrame.AbsoluteSize.Y))
-            targetFrame.Position = UDim2.new(0, newX, 0, newY)
-        end
-    end))
-end
-
-makeDraggable(Title, MainFrame, "MainFrame")
-makeDraggable(MiniBtn, MiniBtn, "MiniBtn")
-makeDraggable(MiniTpBtn, MiniTpBtn, "MiniTpBtn")
-makeDraggable(SettingsTitle, SettingsFrame, "SettingsFrame")
-makeDraggable(PlayerWindowTitle, PlayerWindow, "PlayerWindow")
-
--- Botones Flotantes Rápidos (Neon Glass)
-local function createQuickBtn(name, text, initialPos, toggleFunc)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 36, 0, 36)
-    btn.Position = loadPosition("Quick_" .. name, initialPos)
-    btn.BackgroundColor3 = THEME.BgMain
-    btn.BackgroundTransparency = 0.15
-    btn.Text = text
-    btn.TextColor3 = THEME.TextMain
-    btn.TextSize = 9
-    btn.Font = Enum.Font.GothamBold
-    btn.Visible = false
-    btn.Active = true
-    btn.Parent = ScreenGui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
-    local stroke = applyNeonStroke(btn, THEME.AccentCyan, 0.45, 1.3)
-
-    QuickButtons[name] = btn
-    QuickButtonStrokes[name] = stroke
-
-    local startTouchPos, isDragging, dragStartScreenPos, initialButtonPos
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            startTouchPos = input.Position; isDragging = false; dragStartScreenPos = input.Position; initialButtonPos = btn.Position
-        end
-    end)
-    btn.InputChanged:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and dragStartScreenPos then
-            if (input.Position - dragStartScreenPos).Magnitude > 6 then
-                isDragging = true
-                local delta = input.Position - dragStartScreenPos
-                local vpSize = Camera.ViewportSize
-                local newX = math.clamp(initialButtonPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - btn.AbsoluteSize.X))
-                local newY = math.clamp(initialButtonPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - btn.AbsoluteSize.Y))
-                btn.Position = UDim2.new(0, newX, 0, newY)
-            end
-        end
-    end)
-    btn.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if startTouchPos and not isDragging then
-                toggleFunc()
-            end
-            if isDragging then
-                local snapDistance = 35
-                for otherName, otherBtn in pairs(QuickButtons) do
-                    if otherName ~= name and otherBtn.Visible then
-                        local diffX = math.abs(btn.Position.X.Offset - otherBtn.Position.X.Offset)
-                        local diffY = math.abs(btn.Position.Y.Offset - otherBtn.Position.Y.Offset)
-                        if diffX < snapDistance and diffY < 50 then btn.Position = UDim2.new(0, otherBtn.Position.X.Offset, 0, btn.Position.Y.Offset)
-                        elseif diffY < snapDistance and diffX < 50 then btn.Position = UDim2.new(0, btn.Position.X.Offset, 0, otherBtn.Position.Y.Offset) end
-                    end
-                end
-                savePosition("Quick_" .. name, btn.Position)
-            end
-            startTouchPos = nil; isDragging = false; dragStartScreenPos = nil
-        end
-    end)
-end
-
-if isTouchDevice then
-    createQuickBtn("TPS", "TPS", UDim2.new(0, 60, 0, 100), function()
-        tpEnabled = not tpEnabled
-        setSwitchVisual(tpEnabled, TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke, "TPS")
-    end)
-end
-
-createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleInvisicam(not invisicamEnabled) end)
-createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXRay(not fpXRayEnabled) end)
-createQuickBtn("ESP", "ESP", UDim2.new(0, 180, 0, 100), function() toggleESP(not espEnabled) end)
-createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 220, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end)
-createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0, 145), function() toggleNoclip(not noclipEnabled) end)
-createQuickBtn("InfJump", "JMP", UDim2.new(0, 100, 0, 145), function() toggleInfJump(not infJumpEnabled) end)
-createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not flyEnabled) end)
-createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end)
-createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end)
-createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggleThirdPerson(not thirdPersonEnabled) end)
-
--- Botón Restaurar Flotante (RST)
-local RestoreQuickBtn = Instance.new("TextButton")
-RestoreQuickBtn.Size = UDim2.new(0, 36, 0, 36)
-RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190))
-RestoreQuickBtn.BackgroundColor3 = THEME.BgMain
-RestoreQuickBtn.BackgroundTransparency = 0.15
-RestoreQuickBtn.Text = "RST"
-RestoreQuickBtn.TextColor3 = THEME.AccentRed
-RestoreQuickBtn.TextSize = 9
-RestoreQuickBtn.Font = Enum.Font.GothamBold
-RestoreQuickBtn.Visible = false
-RestoreQuickBtn.Parent = ScreenGui
-Instance.new("UICorner", RestoreQuickBtn).CornerRadius = UDim.new(1, 0)
-local rstStroke = applyNeonStroke(RestoreQuickBtn, THEME.AccentRed, 0.35, 1.3)
-QuickButtons["Restore"] = RestoreQuickBtn
-QuickButtonStrokes["Restore"] = rstStroke
-
-local rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos
-RestoreQuickBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        rStartPos = input.Position; rIsDragging = false; rDragStartScreen = input.Position; rInitBtnPos = RestoreQuickBtn.Position
-    end
-end)
-RestoreQuickBtn.InputChanged:Connect(function(input)
-    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and rDragStartScreen then
-        if (input.Position - rDragStartScreen).Magnitude > 6 then
-            rIsDragging = true
-            local delta = input.Position - rDragStartScreen
-            local vpSize = Camera.ViewportSize
-            local newX = math.clamp(rInitBtnPos.X.Offset + delta.X, 0, math.max(0, vpSize.X - RestoreQuickBtn.AbsoluteSize.X))
-            local newY = math.clamp(rInitBtnPos.Y.Offset + delta.Y, 0, math.max(0, vpSize.Y - RestoreQuickBtn.AbsoluteSize.Y))
-            RestoreQuickBtn.Position = UDim2.new(0, newX, 0, newY)
-        end
-    end
-end)
-RestoreQuickBtn.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if rStartPos and not rIsDragging then
-            RestoreMap()
-            RestoreQuickBtn.TextColor3 = THEME.AccentGreen
-            rstStroke.Color = THEME.AccentGreen
-            task.wait(0.3)
-            RestoreQuickBtn.TextColor3 = THEME.AccentRed
-            rstStroke.Color = THEME.AccentRed
-        end
-        if rIsDragging then savePosition("Quick_Restore", RestoreQuickBtn.Position) end
-        rStartPos, rIsDragging, rDragStartScreen, rInitBtnPos = nil, false, nil, nil
-    end
-end)
-
--- Resetear posiciones
-ResetPositionsBtn.MouseButton1Click:Connect(function()
-    local defaultPositions = {
-        MainFrame = UDim2.new(0, 20, 0, 90),
-        MiniBtn = UDim2.new(0, 15, 0, 200),
-        MiniTpBtn = UDim2.new(0, 68, 0, 200),
-        SettingsFrame = UDim2.new(0, 245, 0, 110),
-        PlayerWindow = UDim2.new(0, 245, 0, 90),
-        Quick_TPS = UDim2.new(0, 60, 0, 100),
-        Quick_Invisicam = UDim2.new(0, 100, 0, 100),
-        Quick_FPXRay = UDim2.new(0, 140, 0, 100),
-        Quick_ESP = UDim2.new(0, 180, 0, 100),
-        Quick_DeleteMode = UDim2.new(0, 220, 0, 100),
-        Quick_Noclip = UDim2.new(0, 60, 0, 145),
-        Quick_InfJump = UDim2.new(0, 100, 0, 145),
-        Quick_Fly = UDim2.new(0, 140, 0, 145),
-        Quick_FreeCam = UDim2.new(0, 180, 0, 145),
-        Quick_Fullbright = UDim2.new(0, 220, 0, 145),
-        Quick_ThirdPerson = UDim2.new(0, 260, 0, 145),
-        Quick_Restore = UDim2.new(0, 60, 0, 190)
-    }
-
-    MainFrame.Position = defaultPositions.MainFrame
-    MiniBtn.Position = defaultPositions.MiniBtn
-    MiniTpBtn.Position = defaultPositions.MiniTpBtn
-    SettingsFrame.Position = defaultPositions.SettingsFrame
-    PlayerWindow.Position = defaultPositions.PlayerWindow
-
-    for key, pos in pairs(defaultPositions) do
-        savePosition(key, pos)
-        if string.sub(key, 1, 6) == "Quick_" then
-            local qName = string.sub(key, 7)
-            if QuickButtons[qName] then QuickButtons[qName].Position = pos end
-        end
-    end
-
-    ResetPositionsBtn.BackgroundColor3 = THEME.AccentGreen
-    task.wait(0.3)
-    ResetPositionsBtn.BackgroundColor3 = THEME.AccentAmber
-end)
-
--- ==========================================
--- CONFIGURACIÓN: VISIBILIDAD DE BOTONES, SLIDERS GUARDADOS Y KEYBINDS
--- ==========================================
-local function createSectionTitle(titleText)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, 0, 0, 18)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = titleText
-    lbl.TextColor3 = THEME.AccentCyan
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 9
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = SettingsScroll
-end
-
-local function createQuickConfig(text, btnName)
-    local bg, knob, card, stroke = createNeonSwitch(SettingsScroll, "🔘", text)
-    local isEnabled = loadButtonState(btnName)
-    setSwitchVisual(isEnabled, bg, knob, card, stroke, nil)
-
-    if QuickButtons[btnName] then
-        QuickButtons[btnName].Visible = isEnabled and quickButtonsMaster
-    end
-
-    bg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local newState = not (bg.BackgroundColor3 == THEME.AccentGreen)
-            setSwitchVisual(newState, bg, knob, card, stroke, nil)
-            if QuickButtons[btnName] then
-                QuickButtons[btnName].Visible = newState and quickButtonsMaster
-            end
-            saveButtonState(btnName, newState)
-        end
-    end)
-end
-
-local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minVal, maxVal, currentVal, callback)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 54)
-    card.BackgroundColor3 = THEME.BgCard
-    card.BackgroundTransparency = 0.25
-    card.BorderSizePixel = 0
-    card.Parent = SettingsScroll
-    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
-    local stroke = applyNeonStroke(card, THEME.AccentCyan, 0.78, 1)
-
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(0.74, 0, 0, 26)
-    titleLbl.Position = UDim2.new(0, 9, 0, 0)
-    titleLbl.BackgroundTransparency = 1
-    titleLbl.Text = "🔘  " .. switchText
-    titleLbl.TextColor3 = THEME.TextMain
-    titleLbl.Font = Enum.Font.GothamMedium
-    titleLbl.TextSize = 10
-    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-    titleLbl.Parent = card
-
-    local bg = Instance.new("TextButton")
-    bg.Size = UDim2.new(0, 32, 0, 16)
-    bg.Position = UDim2.new(1, -40, 0, 5)
-    bg.BackgroundColor3 = THEME.SwitchOff
-    bg.Text = ""
-    bg.AutoButtonColor = false
-    bg.Parent = card
-    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 12, 0, 12)
-    knob.Position = UDim2.new(0, 2, 0.5, -6)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    knob.Parent = bg
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-
-    local isEnabled = loadButtonState(btnName)
-    setSwitchVisual(isEnabled, bg, knob, card, stroke, nil)
-    if QuickButtons[btnName] then
-        QuickButtons[btnName].Visible = isEnabled and quickButtonsMaster
-    end
-
-    bg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local newState = not (bg.BackgroundColor3 == THEME.AccentGreen)
-            setSwitchVisual(newState, bg, knob, card, stroke, nil)
-            if QuickButtons[btnName] then
-                QuickButtons[btnName].Visible = newState and quickButtonsMaster
-            end
-            saveButtonState(btnName, newState)
-        end
-    end)
-
-    local clampedInit = math.clamp(currentVal, minVal, maxVal)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -18, 0, 12)
-    label.Position = UDim2.new(0, 9, 0, 26)
-    label.BackgroundTransparency = 1
-    label.Text = sliderText .. ": " .. clampedInit
-    label.TextColor3 = THEME.TextMuted
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 8
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = card
-
-    local barBg = Instance.new("TextButton")
-    barBg.Size = UDim2.new(1, -18, 0, 6)
-    barBg.Position = UDim2.new(0, 9, 0, 41)
-    barBg.BackgroundColor3 = THEME.SwitchOff
-    barBg.Text = ""
-    barBg.AutoButtonColor = false
-    barBg.Parent = card
-    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new((clampedInit - minVal) / (maxVal - minVal), 0, 1, 0)
-    fill.BackgroundColor3 = THEME.AccentCyan
-    fill.Parent = barBg
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local isSliding = false
-    local latestVal = clampedInit
-    barBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isSliding = true
-        end
-    end)
-    trackConn(UserInputService.InputEnded:Connect(function(input)
-        if isSliding and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-            isSliding = false
-            saveData(saveKey, latestVal)
-        end
-    end))
-    trackConn(UserInputService.InputChanged:Connect(function(input)
-        if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local posX = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
-            fill.Size = UDim2.new(posX, 0, 1, 0)
-            latestVal = math.floor(minVal + (maxVal - minVal) * posX)
-            label.Text = sliderText .. ": " .. latestVal
-            callback(latestVal)
-        end
-    end))
-end
-
-createSectionTitle("  MOSTRAR / OCULTAR BOTONES FLOTANTES")
-
-if isTouchDevice then
-    createQuickConfig("Botón TPS (Toque)", "TPS")
-end
-createQuickConfig("Botón Invisicam (INV)", "Invisicam")
-createQuickConfig("Botón FP X-Ray (XRY)", "FPXRay")
-createQuickConfig("Botón ESP (ESP)", "ESP")
-createQuickConfig("Botón Borrador (DEL)", "DeleteMode")
-createQuickConfig("Botón Noclip (NOC)", "Noclip")
-createQuickConfig("Botón Inf Jump (JMP)", "InfJump")
-createSliderSwitch("Fly", "Botón Fly (FLY)", "Velocidad Fly", "FlySpeed", 10, 300, flySpeed, function(val) flySpeed = val end)
-createSliderSwitch("FreeCam", "Botón Free Cam (CAM)", "Velocidad Free Cam", "FreeCamSpeed", 10, 300, freeCamSpeed, function(val) freeCamSpeed = val end)
-createQuickConfig("Botón Fullbright (LGT)", "Fullbright")
-createQuickConfig("Botón Third Person (3PS)", "ThirdPerson")
-createQuickConfig("Botón Restaurar (RST)", "Restore")
-
--- Conexión de Switches del Panel Principal
-if isTouchDevice then
-    TPSwitchBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            tpEnabled = not tpEnabled
-            setSwitchVisual(tpEnabled, TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke, "TPS")
-        end
-    end)
-end
-
-SwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end end)
-FPXRaySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFPXRay(not fpXRayEnabled) end end)
-ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
-DeleteSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleDeleteMode(not deleteModeEnabled) end end)
-NoclipSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end end)
-InfJumpSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInfJump(not infJumpEnabled) end end)
-FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFly(not flyEnabled) end end)
-FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFreeCam(not freeCamEnabled) end end)
-FullbrightSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end end)
-ThirdPersonSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleThirdPerson(not thirdPersonEnabled) end end)
-
--- Ojo maestro
-MasterQuickBtn.MouseButton1Click:Connect(function()
-    quickButtonsMaster = not quickButtonsMaster
-    MasterQuickBtn.BackgroundColor3 = quickButtonsMaster and THEME.AccentGreen or THEME.SwitchOff
-    for name, btn in pairs(QuickButtons) do
-        if quickButtonsMaster then
-            if name == "TPS" and not isTouchDevice then
-                btn.Visible = false
-            else
-                btn.Visible = loadButtonState(name)
-            end
-        else
-            btn.Visible = false
-        end
-    end
-end)
-
-MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; MiniBtn.Visible = true end)
-MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible = false end)
-SettingsBtn.Activated:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
-CloseSettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = false end)
-
--- Atajos de Teclado (PC)
-createSectionTitle("  ATAJOS DE TECLADO (PC)")
-
-local function createKeybindBox(text, keyName)
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 24)
-    card.BackgroundColor3 = THEME.BgCard
-    card.BackgroundTransparency = 0.25
-    card.Parent = SettingsScroll
-    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 6)
-    applyNeonStroke(card, THEME.AccentCyan, 0.82, 1)
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.65, 0, 1, 0)
-    label.Position = UDim2.new(0, 9, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = THEME.TextMain
-    label.Font = Enum.Font.Gotham
-    label.TextSize = 9
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = card
-
-    local box = Instance.new("TextButton")
-    box.Size = UDim2.new(0, 44, 0, 18)
-    box.Position = UDim2.new(1, -50, 0.5, -9)
-    box.BackgroundColor3 = THEME.BgHeader
-    box.Text = keybinds[keyName].Name
-    box.TextColor3 = THEME.AccentCyan
-    box.Font = Enum.Font.GothamBold
-    box.TextSize = 8
-    box.Parent = card
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
-    applyNeonStroke(box, THEME.AccentCyan, 0.5, 1)
-
-    box.MouseButton1Click:Connect(function()
-        if listeningFor then return end
-        box.Text = "..."
-        box.BackgroundColor3 = THEME.AccentAmber
-        box.TextColor3 = THEME.TextMain
-        listeningFor = keyName
-        local connection
-        connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-            if gameProcessed then return end
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                keybinds[keyName] = input.KeyCode
-                saveKeybind(keyName, input.KeyCode)
-                box.Text = input.KeyCode.Name
-                box.BackgroundColor3 = THEME.BgHeader
-                box.TextColor3 = THEME.AccentCyan
-                listeningFor = nil
-                connection:Disconnect()
-            end
-        end)
-    end)
-end
-
-if not isTouchDevice then createKeybindBox("Tecla TP (PC)", "Teleport") end
-createKeybindBox("Tecla Invisicam", "Invisicam")
-createKeybindBox("Tecla Noclip", "Noclip")
-createKeybindBox("Tecla Fly", "Fly")
-createKeybindBox("Tecla Free Cam", "FreeCam")
-createKeybindBox("Tecla Fullbright", "Fullbright")
-createKeybindBox("Tecla X-Ray", "XRay")
-createKeybindBox("Tecla ESP", "ESP")
-createKeybindBox("Tecla Inf Jump", "InfJump")
-createKeybindBox("Tecla Borrador", "Delete")
-createKeybindBox("Tecla Restaurar", "Restore")
-
--- 🛑 BOTÓN UNLOAD (CERRAR Y LIMPIAR TODO EL SCRIPT)
-createSectionTitle("  SISTEMA")
-local UnloadBtn = Instance.new("TextButton")
-UnloadBtn.Size = UDim2.new(1, 0, 0, 26)
-UnloadBtn.BackgroundColor3 = THEME.AccentRed
-UnloadBtn.BackgroundTransparency = 0.15
-UnloadBtn.Text = "🛑 Cerrar y Limpiar Hub (Unload)"
-UnloadBtn.TextColor3 = THEME.TextMain
-UnloadBtn.Font = Enum.Font.GothamBold
-UnloadBtn.TextSize = 9
-UnloadBtn.Parent = SettingsScroll
-Instance.new("UICorner", UnloadBtn).CornerRadius = UDim.new(0, 6)
-applyNeonStroke(UnloadBtn, THEME.AccentRed, 0.2, 1)
-
-UnloadBtn.MouseButton1Click:Connect(function()
-    hubUnloaded = true
-    if invisicamEnabled then toggleInvisicam(false) end
-    if fpXRayEnabled then toggleFPXRay(false) end
-    if espEnabled then toggleESP(false) end
-    if noclipEnabled then toggleNoclip(false) end
-    if flyEnabled then toggleFly(false) end
-    if freeCamEnabled then toggleFreeCam(false) end
-    if fullbrightEnabled then toggleFullbright(false) end
-    if thirdPersonEnabled then toggleThirdPerson(false) end
-    if spectatingPlayer then resetSpectate() end
-    RestoreMap()
-
-    for _, conn in ipairs(allConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    for _, conn in pairs(espCharConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    if ScreenGui then ScreenGui:Destroy() end
-end)
-
--- Raycast y Controles
 local function raycastIgnoringDeleted(origin, direction)
     local filter = {LocalPlayer.Character, Camera}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(filter, p.Character) end
-    end
-    for _, data in ipairs(deletedPartsMemory) do
-        if data.part and data.part.Parent then table.insert(filter, data.part) end
-    end
+    for _, p in ipairs(Players:GetPlayers()) do if p.Character then table.insert(filter, p.Character) end end
+    for _, data in ipairs(deletedPartsMemory) do if data.part and data.part.Parent then table.insert(filter, data.part) end end
     local params = RaycastParams.new()
     params.FilterDescendantsInstances = filter
     params.FilterType = Enum.RaycastFilterType.Exclude
@@ -1732,37 +854,31 @@ local function TeleportAt(mousePos)
     local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
     local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
     if result then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
-        end
+        -- Usamos el nuevo sistema seguro de ForceTeleport en lugar de asignación directa
+        ForceTeleport(result.Position + Vector3.new(0, 3, 0))
     end
 end
+
+local keybinds = {
+    Invisicam  = loadKeybind("Invisicam",  Enum.KeyCode.V),
+    Noclip     = loadKeybind("Noclip",     Enum.KeyCode.X),
+    Teleport   = loadKeybind("Teleport",   Enum.KeyCode.G),
+    Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
+    Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
+    ESP        = loadKeybind("ESP",        Enum.KeyCode.H),
+}
 
 trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed or listeningFor or hubUnloaded then return end
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if input.KeyCode == keybinds.Invisicam then toggleInvisicam(not invisicamEnabled) end
         if input.KeyCode == keybinds.Noclip then toggleNoclip(not noclipEnabled) end
-        if input.KeyCode == keybinds.Fly then toggleFly(not flyEnabled) end
-        if input.KeyCode == keybinds.FreeCam then toggleFreeCam(not freeCamEnabled) end
-        if input.KeyCode == keybinds.Fullbright then toggleFullbright(not fullbrightEnabled) end
-        if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
         if input.KeyCode == keybinds.ESP then toggleESP(not espEnabled) end
-        if input.KeyCode == keybinds.InfJump then toggleInfJump(not infJumpEnabled) end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
         if input.KeyCode == keybinds.Teleport then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
         if input.KeyCode == keybinds.Delete then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
     end
 end))
-
-local function isOverGui(pos)
-    if not ScreenGui or not ScreenGui.Parent then return false end
-    for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)) do
-        if obj:IsDescendantOf(ScreenGui) then return true end
-    end
-    return false
-end
 
 local touchState = { active = false, startTime = 0, totalMoved = 0, isCameraDrag = false }
 trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1771,7 +887,6 @@ trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         touchState.active = true; touchState.startTime = os.clock(); touchState.totalMoved = 0; touchState.isCameraDrag = false
     end
 end))
-
 trackConn(UserInputService.InputChanged:Connect(function(input, gameProcessed)
     if gameProcessed or hubUnloaded then return end
     if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
@@ -1779,7 +894,13 @@ trackConn(UserInputService.InputChanged:Connect(function(input, gameProcessed)
         if touchState.totalMoved > 10 then touchState.isCameraDrag = true end
     end
 end))
-
+local function isOverGui(pos)
+    if not ScreenGui or not ScreenGui.Parent then return false end
+    for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)) do
+        if obj:IsDescendantOf(ScreenGui) then return true end
+    end
+    return false
+end
 trackConn(UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed or hubUnloaded then return end
     if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
@@ -1790,3 +911,45 @@ trackConn(UserInputService.InputEnded:Connect(function(input, gameProcessed)
         end
     end
 end))
+
+-- Botones Base
+if isTouchDevice then
+    TPSwitchBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            tpEnabled = not tpEnabled; setSwitchVisual(tpEnabled, TPSwitchBg, TPSwitchKnob, TPSwitchCard, TPSwitchStroke, "TPS")
+        end
+    end)
+end
+SwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleInvisicam(not invisicamEnabled) end end)
+NoclipSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleNoclip(not noclipEnabled) end end)
+ESPSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleESP(not espEnabled) end end)
+DeleteSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleDeleteMode(not deleteModeEnabled) end end)
+
+MinimizeBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false; MiniBtn.Visible = true end)
+MiniBtn.Activated:Connect(function() MainFrame.Visible = true; MiniBtn.Visible = false end)
+SettingsBtn.Activated:Connect(function() SettingsFrame.Visible = not SettingsFrame.Visible end)
+CloseSettingsBtn.MouseButton1Click:Connect(function() SettingsFrame.Visible = false end)
+
+-- Sistema de Unload
+local UnloadBtn = Instance.new("TextButton")
+UnloadBtn.Size = UDim2.new(1, -16, 0, 26)
+UnloadBtn.Position = UDim2.new(0, 8, 0, 40)
+UnloadBtn.BackgroundColor3 = THEME.AccentRed
+UnloadBtn.Text = "🛑 Cerrar Hub (Unload)"
+UnloadBtn.TextColor3 = THEME.TextMain
+UnloadBtn.Font = Enum.Font.GothamBold
+UnloadBtn.TextSize = 9
+UnloadBtn.Parent = SettingsFrame
+Instance.new("UICorner", UnloadBtn).CornerRadius = UDim.new(0, 6)
+
+UnloadBtn.MouseButton1Click:Connect(function()
+    hubUnloaded = true
+    if invisicamEnabled then toggleInvisicam(false) end
+    if espEnabled then toggleESP(false) end
+    if noclipEnabled then toggleNoclip(false) end
+    if spectatingPlayer then resetSpectate() end
+    RestoreMap()
+    for _, conn in ipairs(allConnections) do pcall(function() conn:Disconnect() end) end
+    for _, conn in pairs(espCharConnections) do pcall(function() conn:Disconnect() end) end
+    if ScreenGui then ScreenGui:Destroy() end
+end)
