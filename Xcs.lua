@@ -1,11 +1,14 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v2.2 - Optimizado)
+-- HUB: xcs (Neon Glass v2.3)
 -- ==========================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
@@ -122,6 +125,7 @@ local deleteModeEnabled = false
 local espEnabled = false
 local infJumpEnabled = false
 local thirdPersonEnabled = false
+local antiAfkEnabled = false
 local quickButtonsMaster = true
 local hubUnloaded = false
 
@@ -142,6 +146,7 @@ local flyAlignOri = nil
 local fpXRayConnection = nil
 local invisicamConnection = nil
 local thirdPersonConnection = nil
+local antiAfkConnection = nil
 local transparentParts = {}
 local deletedPartsMemory = {}
 local espHighlights = {}
@@ -174,9 +179,11 @@ local keybinds = {
     Teleport   = loadKeybind("Teleport",   Enum.KeyCode.G),
     XRay       = loadKeybind("XRay",       Enum.KeyCode.K),
     Delete     = loadKeybind("Delete",     Enum.KeyCode.L),
+    Undo       = loadKeybind("Undo",       Enum.KeyCode.U),
     Restore    = loadKeybind("Restore",    Enum.KeyCode.R),
     ESP        = loadKeybind("ESP",        Enum.KeyCode.H),
     InfJump    = loadKeybind("InfJump",    Enum.KeyCode.J),
+    AntiAFK    = loadKeybind("AntiAFK",    Enum.KeyCode.N),
 }
 
 -- Helper de bordes neón
@@ -213,7 +220,7 @@ MiniBtn.Parent = ScreenGui
 Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
 applyNeonStroke(MiniBtn, THEME.AccentCyan, 0.2, 1.5)
 
--- Botón flotante minimizado de TP Jugadores
+-- Botón flotante minimizado de TP & Waypoints
 local MiniTpBtn = Instance.new("TextButton")
 MiniTpBtn.Size = UDim2.new(0, 44, 0, 44)
 MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 68, 0, 200))
@@ -231,7 +238,7 @@ applyNeonStroke(MiniTpBtn, THEME.AccentCyan, 0.25, 1.5)
 -- Ventana Principal Compacta
 local MainFrame = Instance.new("Frame")
 Stealth.HideInstance(MainFrame)
-MainFrame.Size = UDim2.new(0, 215, 0, 350)
+MainFrame.Size = UDim2.new(0, 215, 0, 360)
 MainFrame.Position = loadPosition("MainFrame", UDim2.new(0, 20, 0, 90))
 MainFrame.BackgroundColor3 = THEME.BgMain
 MainFrame.BackgroundTransparency = 0.12
@@ -388,12 +395,68 @@ local SwitchBg, SwitchKnob, SwitchCard, SwitchStroke = createNeonSwitch(MainScro
 local FPXRaySwitchBg, FPXRaySwitchKnob, FPXRayCard, FPXRayStroke = createNeonSwitch(MainScroll, "🧱", "FP X-Ray")
 local ESPSwitchBg, ESPSwitchKnob, ESPCard, ESPStroke = createNeonSwitch(MainScroll, "🎯", "ESP Jugadores")
 local DeleteSwitchBg, DeleteSwitchKnob, DeleteCard, DeleteStroke = createNeonSwitch(MainScroll, "🗑️", "Borrador Paredes")
+
+-- Fila compacta de Undo Delete / Restaurar Todo debajo de Borrador Paredes
+local DeleteActionsRow = Instance.new("Frame")
+DeleteActionsRow.Size = UDim2.new(1, 0, 0, 24)
+DeleteActionsRow.BackgroundTransparency = 1
+DeleteActionsRow.Parent = MainScroll
+
+local UndoLastBtn = Instance.new("TextButton")
+UndoLastBtn.Size = UDim2.new(0.56, -2, 1, 0)
+UndoLastBtn.Position = UDim2.new(0, 0, 0, 0)
+UndoLastBtn.BackgroundColor3 = THEME.BgCard
+UndoLastBtn.BackgroundTransparency = 0.2
+UndoLastBtn.Text = "↩️ Undo (0)"
+UndoLastBtn.TextColor3 = THEME.AccentCyan
+UndoLastBtn.Font = Enum.Font.GothamBold
+UndoLastBtn.TextSize = 9
+UndoLastBtn.Parent = DeleteActionsRow
+Instance.new("UICorner", UndoLastBtn).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(UndoLastBtn, THEME.AccentCyan, 0.55, 1)
+
+local RestoreAllBtn = Instance.new("TextButton")
+RestoreAllBtn.Size = UDim2.new(0.44, -2, 1, 0)
+RestoreAllBtn.Position = UDim2.new(0.56, 2, 0, 0)
+RestoreAllBtn.BackgroundColor3 = THEME.BgCard
+RestoreAllBtn.BackgroundTransparency = 0.2
+RestoreAllBtn.Text = "🧱 Todo"
+RestoreAllBtn.TextColor3 = THEME.AccentRed
+RestoreAllBtn.Font = Enum.Font.GothamBold
+RestoreAllBtn.TextSize = 9
+RestoreAllBtn.Parent = DeleteActionsRow
+Instance.new("UICorner", RestoreAllBtn).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(RestoreAllBtn, THEME.AccentRed, 0.55, 1)
+
 local NoclipSwitchBg, NoclipSwitchKnob, NoclipCard, NoclipStroke = createNeonSwitch(MainScroll, "👻", "Noclip")
 local InfJumpSwitchBg, InfJumpSwitchKnob, InfJumpCard, InfJumpStroke = createNeonSwitch(MainScroll, "⚡", "Infinite Jump")
 local FlySwitchBg, FlySwitchKnob, FlyCard, FlyStroke = createNeonSwitch(MainScroll, "🕊️", "Fly")
 local FreeCamSwitchBg, FreeCamSwitchKnob, FreeCamCard, FreeCamStroke = createNeonSwitch(MainScroll, "🎥", "Free Cam")
 local FullbrightSwitchBg, FullbrightSwitchKnob, FullbrightCard, FullbrightStroke = createNeonSwitch(MainScroll, "☀️", "Fullbright")
 local ThirdPersonSwitchBg, ThirdPersonSwitchKnob, ThirdPersonCard, ThirdPersonStroke = createNeonSwitch(MainScroll, "🧍", "Third Person")
+local AntiAfkSwitchBg, AntiAfkSwitchKnob, AntiAfkCard, AntiAfkStroke = createNeonSwitch(MainScroll, "🛡️", "Anti-AFK")
+
+-- 🛡️ Lógica Anti-AFK
+local function toggleAntiAfk(state)
+    antiAfkEnabled = state
+    setSwitchVisual(state, AntiAfkSwitchBg, AntiAfkSwitchKnob, AntiAfkCard, AntiAfkStroke, "AntiAFK")
+
+    if state then
+        if antiAfkConnection then antiAfkConnection:Disconnect() end
+        antiAfkConnection = LocalPlayer.Idled:Connect(function()
+            if not antiAfkEnabled then return end
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end)
+    else
+        if antiAfkConnection then
+            antiAfkConnection:Disconnect()
+            antiAfkConnection = nil
+        end
+    end
+end
 
 -- 🎥 Lógica de Invisicam con Zoom Libre integrado
 local function toggleInvisicam(state)
@@ -450,10 +513,12 @@ local function toggleThirdPerson(state)
     end
 end
 
--- 👥 Ventana de TP a Jugadores (Con Distancia y Botón Volver a Mí)
+-- ==========================================
+-- 👥 VENTANA DE TP JUGADORES & 📍 WAYPOINTS
+-- ==========================================
 local PlayerWindow = Instance.new("Frame")
 Stealth.HideInstance(PlayerWindow)
-PlayerWindow.Size = UDim2.new(0, 215, 0, 325)
+PlayerWindow.Size = UDim2.new(0, 220, 0, 340)
 PlayerWindow.Position = loadPosition("PlayerWindow", UDim2.new(0, 245, 0, 90))
 PlayerWindow.BackgroundColor3 = THEME.BgMain
 PlayerWindow.BackgroundTransparency = 0.12
@@ -467,7 +532,7 @@ local PlayerWindowTitle = Instance.new("TextButton")
 PlayerWindowTitle.Size = UDim2.new(1, 0, 0, 28)
 PlayerWindowTitle.BackgroundColor3 = THEME.BgHeader
 PlayerWindowTitle.BackgroundTransparency = 0.15
-PlayerWindowTitle.Text = "  👥 TP Jugadores"
+PlayerWindowTitle.Text = "  👥 TP & Waypoints"
 PlayerWindowTitle.TextColor3 = THEME.AccentCyan
 PlayerWindowTitle.Font = Enum.Font.GothamBold
 PlayerWindowTitle.TextSize = 11
@@ -499,15 +564,48 @@ PlayerWindowCloseBtn.Font = Enum.Font.GothamBold
 PlayerWindowCloseBtn.Parent = PlayerWindowTitle
 Instance.new("UICorner", PlayerWindowCloseBtn).CornerRadius = UDim.new(0, 5)
 
+-- Barra de Sub-Pestañas (Jugadores / Waypoints)
+local SubTabBar = Instance.new("Frame")
+SubTabBar.Size = UDim2.new(1, -16, 0, 24)
+SubTabBar.Position = UDim2.new(0, 8, 0, 32)
+SubTabBar.BackgroundColor3 = THEME.BgHeader
+SubTabBar.Parent = PlayerWindow
+Instance.new("UICorner", SubTabBar).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(SubTabBar, THEME.AccentCyan, 0.7, 1)
+
+local TabPlayersBtn = Instance.new("TextButton")
+TabPlayersBtn.Size = UDim2.new(0.5, -2, 1, -4)
+TabPlayersBtn.Position = UDim2.new(0, 2, 0, 2)
+TabPlayersBtn.BackgroundColor3 = THEME.AccentCyan
+TabPlayersBtn.Text = "👥 Jugadores"
+TabPlayersBtn.TextColor3 = THEME.BgMain
+TabPlayersBtn.Font = Enum.Font.GothamBold
+TabPlayersBtn.TextSize = 9
+TabPlayersBtn.Parent = SubTabBar
+Instance.new("UICorner", TabPlayersBtn).CornerRadius = UDim.new(0, 5)
+
+local TabWaypointsBtn = Instance.new("TextButton")
+TabWaypointsBtn.Size = UDim2.new(0.5, -2, 1, -4)
+TabWaypointsBtn.Position = UDim2.new(0.5, 0, 0, 2)
+TabWaypointsBtn.BackgroundColor3 = THEME.BgHeader
+TabWaypointsBtn.Text = "📍 Waypoints"
+TabWaypointsBtn.TextColor3 = THEME.TextMuted
+TabWaypointsBtn.Font = Enum.Font.GothamBold
+TabWaypointsBtn.TextSize = 9
+TabWaypointsBtn.Parent = SubTabBar
+Instance.new("UICorner", TabWaypointsBtn).CornerRadius = UDim.new(0, 5)
+
+-- Contenedor Pestaña Jugadores
 local PlayerWindowScroll = Instance.new("ScrollingFrame")
-PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -30)
-PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 30)
+PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -60)
+PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 60)
 PlayerWindowScroll.BackgroundTransparency = 1
 PlayerWindowScroll.BorderSizePixel = 0
 PlayerWindowScroll.ScrollBarThickness = 2
 PlayerWindowScroll.ScrollBarImageColor3 = THEME.AccentCyan
 PlayerWindowScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 PlayerWindowScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PlayerWindowScroll.Visible = true
 PlayerWindowScroll.Parent = PlayerWindow
 
 local PlayerWindowScrollList = Instance.new("UIListLayout")
@@ -516,7 +614,7 @@ PlayerWindowScrollList.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerWindowScrollList.Parent = PlayerWindowScroll
 
 local PlayerWindowPadding = Instance.new("UIPadding")
-PlayerWindowPadding.PaddingTop = UDim.new(0, 6)
+PlayerWindowPadding.PaddingTop = UDim.new(0, 4)
 PlayerWindowPadding.PaddingBottom = UDim.new(0, 8)
 PlayerWindowPadding.PaddingLeft = UDim.new(0, 8)
 PlayerWindowPadding.PaddingRight = UDim.new(0, 8)
@@ -537,7 +635,6 @@ searchBox.Parent = PlayerWindowScroll
 Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
 applyNeonStroke(searchBox, THEME.AccentCyan, 0.65, 1)
 
--- Botón rápido para volver la cámara a tu personaje
 local ResetCamSelfBtn = Instance.new("TextButton")
 ResetCamSelfBtn.Size = UDim2.new(1, 0, 0, 22)
 ResetCamSelfBtn.BackgroundColor3 = THEME.BgCardOn
@@ -561,6 +658,222 @@ PlayerListLayout.Padding = UDim.new(0, 4)
 PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerListLayout.Parent = PlayerListContainer
 
+-- Contenedor Pestaña Waypoints
+local WaypointScroll = Instance.new("ScrollingFrame")
+WaypointScroll.Size = UDim2.new(1, 0, 1, -60)
+WaypointScroll.Position = UDim2.new(0, 0, 0, 60)
+WaypointScroll.BackgroundTransparency = 1
+WaypointScroll.BorderSizePixel = 0
+WaypointScroll.ScrollBarThickness = 2
+WaypointScroll.ScrollBarImageColor3 = THEME.AccentCyan
+WaypointScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+WaypointScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+WaypointScroll.Visible = false
+WaypointScroll.Parent = PlayerWindow
+
+local WaypointScrollList = Instance.new("UIListLayout")
+WaypointScrollList.Padding = UDim.new(0, 6)
+WaypointScrollList.SortOrder = Enum.SortOrder.LayoutOrder
+WaypointScrollList.Parent = WaypointScroll
+
+local WaypointPadding = Instance.new("UIPadding")
+WaypointPadding.PaddingTop = UDim.new(0, 4)
+WaypointPadding.PaddingBottom = UDim.new(0, 8)
+WaypointPadding.PaddingLeft = UDim.new(0, 8)
+WaypointPadding.PaddingRight = UDim.new(0, 8)
+WaypointPadding.Parent = WaypointScroll
+
+local wpCreateRow = Instance.new("Frame")
+wpCreateRow.Size = UDim2.new(1, 0, 0, 24)
+wpCreateRow.BackgroundTransparency = 1
+wpCreateRow.Parent = WaypointScroll
+
+local wpNameBox = Instance.new("TextBox")
+wpNameBox.Size = UDim2.new(0.62, -2, 1, 0)
+wpNameBox.BackgroundColor3 = THEME.BgCard
+wpNameBox.BackgroundTransparency = 0.15
+wpNameBox.Text = ""
+wpNameBox.PlaceholderText = "Nombre punto..."
+wpNameBox.PlaceholderColor3 = THEME.TextMuted
+wpNameBox.TextColor3 = THEME.TextMain
+wpNameBox.Font = Enum.Font.Gotham
+wpNameBox.TextSize = 9
+wpNameBox.ClearTextOnFocus = false
+wpNameBox.Parent = wpCreateRow
+Instance.new("UICorner", wpNameBox).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(wpNameBox, THEME.AccentCyan, 0.65, 1)
+
+local wpSaveBtn = Instance.new("TextButton")
+wpSaveBtn.Size = UDim2.new(0.38, -2, 1, 0)
+wpSaveBtn.Position = UDim2.new(0.62, 2, 0, 0)
+wpSaveBtn.BackgroundColor3 = THEME.AccentGreen
+wpSaveBtn.Text = "+ Guardar"
+wpSaveBtn.TextColor3 = THEME.BgMain
+wpSaveBtn.Font = Enum.Font.GothamBold
+wpSaveBtn.TextSize = 9
+wpSaveBtn.Parent = wpCreateRow
+Instance.new("UICorner", wpSaveBtn).CornerRadius = UDim.new(0, 6)
+
+local WaypointListContainer = Instance.new("Frame")
+WaypointListContainer.Size = UDim2.new(1, 0, 0, 0)
+WaypointListContainer.AutomaticSize = Enum.AutomaticSize.Y
+WaypointListContainer.BackgroundTransparency = 1
+WaypointListContainer.Parent = WaypointScroll
+
+local WaypointListLayout = Instance.new("UIListLayout")
+WaypointListLayout.Padding = UDim.new(0, 4)
+WaypointListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+WaypointListLayout.Parent = WaypointListContainer
+
+-- Cambio de Sub-Pestañas
+TabPlayersBtn.MouseButton1Click:Connect(function()
+    PlayerWindowScroll.Visible = true
+    WaypointScroll.Visible = false
+    TabPlayersBtn.BackgroundColor3 = THEME.AccentCyan
+    TabPlayersBtn.TextColor3 = THEME.BgMain
+    TabWaypointsBtn.BackgroundColor3 = THEME.BgHeader
+    TabWaypointsBtn.TextColor3 = THEME.TextMuted
+end)
+
+TabWaypointsBtn.MouseButton1Click:Connect(function()
+    PlayerWindowScroll.Visible = false
+    WaypointScroll.Visible = true
+    TabWaypointsBtn.BackgroundColor3 = THEME.AccentCyan
+    TabWaypointsBtn.TextColor3 = THEME.BgMain
+    TabPlayersBtn.BackgroundColor3 = THEME.BgHeader
+    TabPlayersBtn.TextColor3 = THEME.TextMuted
+end)
+
+-- Lógica de Waypoints persistentes por juego (PlaceId)
+local wpStorageKey = "Waypoints_" .. tostring(game.PlaceId)
+local savedWaypoints = {}
+
+local function loadWaypointsFromDisk()
+    local raw = loadData(wpStorageKey, nil)
+    if raw and raw ~= "" then
+        local ok, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+        if ok and type(decoded) == "table" then
+            savedWaypoints = decoded
+        end
+    end
+end
+
+local function saveWaypointsToDisk()
+    pcall(function()
+        local encoded = HttpService:JSONEncode(savedWaypoints)
+        saveData(wpStorageKey, encoded)
+    end)
+end
+
+local function refreshWaypointList()
+    for _, child in ipairs(WaypointListContainer:GetChildren()) do
+        if child:IsA("Frame") or child:IsA("TextLabel") then child:Destroy() end
+    end
+
+    if #savedWaypoints == 0 then
+        local emptyLbl = Instance.new("TextLabel")
+        emptyLbl.Size = UDim2.new(1, 0, 0, 26)
+        emptyLbl.BackgroundTransparency = 1
+        emptyLbl.Text = "Sin puntos guardados en este mapa"
+        emptyLbl.TextColor3 = THEME.TextMuted
+        emptyLbl.Font = Enum.Font.Gotham
+        emptyLbl.TextSize = 9
+        emptyLbl.Parent = WaypointListContainer
+        return
+    end
+
+    for idx, wp in ipairs(savedWaypoints) do
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, 0, 0, 30)
+        row.BackgroundColor3 = THEME.BgCard
+        row.BackgroundTransparency = 0.25
+        row.Parent = WaypointListContainer
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+        applyNeonStroke(row, THEME.AccentCyan, 0.78, 1)
+
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.Size = UDim2.new(0.58, 0, 0, 14)
+        nameLbl.Position = UDim2.new(0, 7, 0, 2)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Text = "📍 " .. tostring(wp.name)
+        nameLbl.TextColor3 = THEME.TextMain
+        nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextSize = 9
+        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nameLbl.Parent = row
+
+        local coordLbl = Instance.new("TextLabel")
+        coordLbl.Size = UDim2.new(0.58, 0, 0, 11)
+        coordLbl.Position = UDim2.new(0, 7, 0, 16)
+        coordLbl.BackgroundTransparency = 1
+        coordLbl.Text = string.format("%d, %d, %d", math.floor(wp.x), math.floor(wp.y), math.floor(wp.z))
+        coordLbl.TextColor3 = THEME.TextMuted
+        coordLbl.Font = Enum.Font.Gotham
+        coordLbl.TextSize = 8
+        coordLbl.TextXAlignment = Enum.TextXAlignment.Left
+        coordLbl.Parent = row
+
+        local goBtn = Instance.new("TextButton")
+        goBtn.Size = UDim2.new(0, 26, 0, 18)
+        goBtn.Position = UDim2.new(1, -52, 0.5, -9)
+        goBtn.BackgroundColor3 = THEME.AccentCyan
+        goBtn.Text = "TP"
+        goBtn.TextColor3 = THEME.BgMain
+        goBtn.Font = Enum.Font.GothamBold
+        goBtn.TextSize = 8
+        goBtn.Parent = row
+        Instance.new("UICorner", goBtn).CornerRadius = UDim.new(0, 4)
+        goBtn.MouseButton1Click:Connect(function()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = CFrame.new(wp.x, wp.y + 2, wp.z)
+            end
+        end)
+
+        local delBtn = Instance.new("TextButton")
+        delBtn.Size = UDim2.new(0, 20, 0, 18)
+        delBtn.Position = UDim2.new(1, -23, 0.5, -9)
+        delBtn.BackgroundColor3 = THEME.AccentRed
+        delBtn.Text = "✕"
+        delBtn.TextColor3 = THEME.TextMain
+        delBtn.Font = Enum.Font.GothamBold
+        delBtn.TextSize = 8
+        delBtn.Parent = row
+        Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
+        delBtn.MouseButton1Click:Connect(function()
+            table.remove(savedWaypoints, idx)
+            saveWaypointsToDisk()
+            refreshWaypointList()
+        end)
+    end
+end
+
+wpSaveBtn.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local labelName = wpNameBox.Text
+    if labelName == nil or string.gsub(labelName, "%s+", "") == "" then
+        labelName = "Punto #" .. tostring(#savedWaypoints + 1)
+    end
+    local pos = hrp.Position
+    table.insert(savedWaypoints, {
+        name = labelName,
+        x = pos.X,
+        y = pos.Y,
+        z = pos.Z
+    })
+    wpNameBox.Text = ""
+    saveWaypointsToDisk()
+    refreshWaypointList()
+end)
+
+loadWaypointsFromDisk()
+refreshWaypointList()
+
+-- Lógica TP Jugadores
 local function teleportToPlayer(targetPlayer)
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local char = LocalPlayer.Character
@@ -700,10 +1013,9 @@ refreshPlayerList = function()
     end
 end
 
--- Actualizador ligero de distancias (solo cuando PlayerWindow está visible)
 task.spawn(function()
     while not hubUnloaded do
-        if PlayerWindow.Visible then
+        if PlayerWindow.Visible and PlayerWindowScroll.Visible then
             local myChar = LocalPlayer.Character
             local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
             for plr, lbl in pairs(playerDistanceLabels) do
@@ -738,7 +1050,7 @@ MiniTpBtn.Activated:Connect(function() PlayerWindow.Visible = true; MiniTpBtn.Vi
 -- ⚙️ Ventana de Configuración
 local SettingsFrame = Instance.new("Frame")
 Stealth.HideInstance(SettingsFrame)
-SettingsFrame.Size = UDim2.new(0, 220, 0, 345)
+SettingsFrame.Size = UDim2.new(0, 220, 0, 355)
 SettingsFrame.Position = loadPosition("SettingsFrame", UDim2.new(0, 245, 0, 110))
 SettingsFrame.BackgroundColor3 = THEME.BgMain
 SettingsFrame.BackgroundTransparency = 0.1
@@ -796,9 +1108,7 @@ SettingsPadding.PaddingLeft = UDim.new(0, 8)
 SettingsPadding.PaddingRight = UDim.new(0, 8)
 SettingsPadding.Parent = SettingsScroll
 
--- ==========================================
--- 🎯 LÓGICA DE ESP OPTIMIZADA (POR EVENTOS, CERO LAG)
--- ==========================================
+-- 🎯 LÓGICA DE ESP OPTIMIZADA
 local function applyHighlightToCharacter(plr, char)
     if not espEnabled or plr == LocalPlayer or not char then return end
     if espHighlights[plr] and espHighlights[plr].Parent then
@@ -859,9 +1169,7 @@ trackConn(Players.PlayerRemoving:Connect(function(plr)
     end
 end))
 
--- ==========================================
--- 👻 NOCLIP OPTIMIZADO (CON CACHÉ DE PARTES)
--- ==========================================
+-- 👻 NOCLIP OPTIMIZADO
 local function cacheCharacterParts(char)
     cachedCharParts = {}
     if not char then return end
@@ -926,9 +1234,30 @@ trackConn(UserInputService.JumpRequest:Connect(function()
     end
 end))
 
+-- 🗑️ BORRADOR, UNDO LAST DELETE & RESTORE ALL
+local function updateDeleteCounter()
+    local count = #deletedPartsMemory
+    UndoLastBtn.Text = "↩️ Undo (" .. tostring(count) .. ")"
+    if QuickButtons["UndoDelete"] then
+        QuickButtons["UndoDelete"].Text = count > 0 and ("↩" .. tostring(count)) or "UND"
+    end
+end
+
 local function toggleDeleteMode(state)
     deleteModeEnabled = state
     setSwitchVisual(state, DeleteSwitchBg, DeleteSwitchKnob, DeleteCard, DeleteStroke, "DeleteMode")
+end
+
+local function UndoLastDelete()
+    while #deletedPartsMemory > 0 do
+        local lastData = table.remove(deletedPartsMemory)
+        if lastData and lastData.part and lastData.part.Parent then
+            lastData.part.Transparency = lastData.trans
+            lastData.part.CanCollide = lastData.collide
+            break
+        end
+    end
+    updateDeleteCounter()
 end
 
 local function RestoreMap()
@@ -939,7 +1268,22 @@ local function RestoreMap()
         end
     end
     deletedPartsMemory = {}
+    updateDeleteCounter()
 end
+
+UndoLastBtn.MouseButton1Click:Connect(function()
+    UndoLastDelete()
+    UndoLastBtn.BackgroundColor3 = THEME.BgCardOn
+    task.wait(0.2)
+    UndoLastBtn.BackgroundColor3 = THEME.BgCard
+end)
+
+RestoreAllBtn.MouseButton1Click:Connect(function()
+    RestoreMap()
+    RestoreAllBtn.BackgroundColor3 = THEME.BgCardOn
+    task.wait(0.2)
+    RestoreAllBtn.BackgroundColor3 = THEME.BgCard
+end)
 
 local function toggleFPXRay(state)
     fpXRayEnabled = state
@@ -1030,9 +1374,7 @@ end
 
 local toggleFreeCam
 
--- ==========================================
--- 🕊️ FLY MODERNO (LinearVelocity + AlignOrientation)
--- ==========================================
+-- 🕊️ FLY MODERNO
 local function cleanupFlyPhysics()
     if flyConnection then flyConnection:Disconnect(); flyConnection = nil end
     if flyLinearVel then flyLinearVel:Destroy(); flyLinearVel = nil end
@@ -1296,14 +1638,16 @@ createQuickBtn("Invisicam", "INV", UDim2.new(0, 100, 0, 100), function() toggleI
 createQuickBtn("FPXRay", "XRY", UDim2.new(0, 140, 0, 100), function() toggleFPXRay(not fpXRayEnabled) end)
 createQuickBtn("ESP", "ESP", UDim2.new(0, 180, 0, 100), function() toggleESP(not espEnabled) end)
 createQuickBtn("DeleteMode", "DEL", UDim2.new(0, 220, 0, 100), function() toggleDeleteMode(not deleteModeEnabled) end)
+createQuickBtn("UndoDelete", "UND", UDim2.new(0, 100, 0, 190), function() UndoLastDelete() end)
 createQuickBtn("Noclip", "NOC", UDim2.new(0, 60, 0, 145), function() toggleNoclip(not noclipEnabled) end)
 createQuickBtn("InfJump", "JMP", UDim2.new(0, 100, 0, 145), function() toggleInfJump(not infJumpEnabled) end)
 createQuickBtn("Fly", "FLY", UDim2.new(0, 140, 0, 145), function() toggleFly(not flyEnabled) end)
 createQuickBtn("FreeCam", "CAM", UDim2.new(0, 180, 0, 145), function() toggleFreeCam(not freeCamEnabled) end)
 createQuickBtn("Fullbright", "LGT", UDim2.new(0, 220, 0, 145), function() toggleFullbright(not fullbrightEnabled) end)
 createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggleThirdPerson(not thirdPersonEnabled) end)
+createQuickBtn("AntiAFK", "AFK", UDim2.new(0, 140, 0, 190), function() toggleAntiAfk(not antiAfkEnabled) end)
 
--- Botón Restaurar Flotante (RST)
+-- Botón Restaurar Todo Flotante (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
 RestoreQuickBtn.Size = UDim2.new(0, 36, 0, 36)
 RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190))
@@ -1372,7 +1716,9 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
         Quick_FreeCam = UDim2.new(0, 180, 0, 145),
         Quick_Fullbright = UDim2.new(0, 220, 0, 145),
         Quick_ThirdPerson = UDim2.new(0, 260, 0, 145),
-        Quick_Restore = UDim2.new(0, 60, 0, 190)
+        Quick_Restore = UDim2.new(0, 60, 0, 190),
+        Quick_UndoDelete = UDim2.new(0, 100, 0, 190),
+        Quick_AntiAFK = UDim2.new(0, 140, 0, 190)
     }
 
     MainFrame.Position = defaultPositions.MainFrame
@@ -1395,7 +1741,7 @@ ResetPositionsBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- CONFIGURACIÓN: VISIBILIDAD DE BOTONES, SLIDERS GUARDADOS Y KEYBINDS
+-- CONFIGURACIÓN: BOTONES FLOTANTES, SLIDERS, KEYBINDS Y REJOIN / SERVER HOP
 -- ==========================================
 local function createSectionTitle(titleText)
     local lbl = Instance.new("TextLabel")
@@ -1544,13 +1890,15 @@ createQuickConfig("Botón Invisicam (INV)", "Invisicam")
 createQuickConfig("Botón FP X-Ray (XRY)", "FPXRay")
 createQuickConfig("Botón ESP (ESP)", "ESP")
 createQuickConfig("Botón Borrador (DEL)", "DeleteMode")
+createQuickConfig("Botón Undo Delete (UND)", "UndoDelete")
+createQuickConfig("Botón Restaurar (RST)", "Restore")
 createQuickConfig("Botón Noclip (NOC)", "Noclip")
 createQuickConfig("Botón Inf Jump (JMP)", "InfJump")
 createSliderSwitch("Fly", "Botón Fly (FLY)", "Velocidad Fly", "FlySpeed", 10, 300, flySpeed, function(val) flySpeed = val end)
 createSliderSwitch("FreeCam", "Botón Free Cam (CAM)", "Velocidad Free Cam", "FreeCamSpeed", 10, 300, freeCamSpeed, function(val) freeCamSpeed = val end)
 createQuickConfig("Botón Fullbright (LGT)", "Fullbright")
 createQuickConfig("Botón Third Person (3PS)", "ThirdPerson")
-createQuickConfig("Botón Restaurar (RST)", "Restore")
+createQuickConfig("Botón Anti-AFK (AFK)", "AntiAFK")
 
 -- Conexión de Switches del Panel Principal
 if isTouchDevice then
@@ -1572,6 +1920,7 @@ FlySwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.Us
 FreeCamSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFreeCam(not freeCamEnabled) end end)
 FullbrightSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleFullbright(not fullbrightEnabled) end end)
 ThirdPersonSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleThirdPerson(not thirdPersonEnabled) end end)
+AntiAfkSwitchBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then toggleAntiAfk(not antiAfkEnabled) end end)
 
 -- Ojo maestro
 MasterQuickBtn.MouseButton1Click:Connect(function()
@@ -1661,11 +2010,83 @@ createKeybindBox("Tecla Fullbright", "Fullbright")
 createKeybindBox("Tecla X-Ray", "XRay")
 createKeybindBox("Tecla ESP", "ESP")
 createKeybindBox("Tecla Inf Jump", "InfJump")
+createKeybindBox("Tecla Anti-AFK", "AntiAFK")
 createKeybindBox("Tecla Borrador", "Delete")
-createKeybindBox("Tecla Restaurar", "Restore")
+createKeybindBox("Tecla Undo Borrado", "Undo")
+createKeybindBox("Tecla Restaurar Todo", "Restore")
 
--- 🛑 BOTÓN UNLOAD (CERRAR Y LIMPIAR TODO EL SCRIPT)
-createSectionTitle("  SISTEMA")
+-- 🌐 SISTEMA: REJOIN, SERVER HOP & UNLOAD
+createSectionTitle("  SISTEMA Y SERVIDOR")
+
+local ServerRow = Instance.new("Frame")
+ServerRow.Size = UDim2.new(1, 0, 0, 26)
+ServerRow.BackgroundTransparency = 1
+ServerRow.Parent = SettingsScroll
+
+local RejoinBtn = Instance.new("TextButton")
+RejoinBtn.Size = UDim2.new(0.48, -2, 1, 0)
+RejoinBtn.Position = UDim2.new(0, 0, 0, 0)
+RejoinBtn.BackgroundColor3 = THEME.BgCard
+RejoinBtn.Text = "🔄 Rejoin"
+RejoinBtn.TextColor3 = THEME.AccentCyan
+RejoinBtn.Font = Enum.Font.GothamBold
+RejoinBtn.TextSize = 9
+RejoinBtn.Parent = ServerRow
+Instance.new("UICorner", RejoinBtn).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(RejoinBtn, THEME.AccentCyan, 0.45, 1)
+
+local ServerHopBtn = Instance.new("TextButton")
+ServerHopBtn.Size = UDim2.new(0.52, -2, 1, 0)
+ServerHopBtn.Position = UDim2.new(0.48, 2, 0, 0)
+ServerHopBtn.BackgroundColor3 = THEME.BgCard
+ServerHopBtn.Text = "🌐 Server Hop"
+ServerHopBtn.TextColor3 = THEME.AccentAmber
+ServerHopBtn.Font = Enum.Font.GothamBold
+ServerHopBtn.TextSize = 9
+ServerHopBtn.Parent = ServerRow
+Instance.new("UICorner", ServerHopBtn).CornerRadius = UDim.new(0, 6)
+applyNeonStroke(ServerHopBtn, THEME.AccentAmber, 0.45, 1)
+
+RejoinBtn.MouseButton1Click:Connect(function()
+    RejoinBtn.Text = "⏳ Entrando..."
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end)
+end)
+
+ServerHopBtn.MouseButton1Click:Connect(function()
+    ServerHopBtn.Text = "🔍 Buscando..."
+    task.spawn(function()
+        local hopped = false
+        local ok, response = pcall(function()
+            return game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100")
+        end)
+        if ok and response then
+            local parseOk, data = pcall(function() return HttpService:JSONDecode(response) end)
+            if parseOk and data and data.data then
+                local candidates = {}
+                for _, srv in ipairs(data.data) do
+                    if type(srv) == "table" and srv.id ~= game.JobId and tonumber(srv.playing) and tonumber(srv.maxPlayers) and srv.playing < srv.maxPlayers then
+                        table.insert(candidates, srv.id)
+                    end
+                end
+                if #candidates > 0 then
+                    local chosenId = candidates[math.random(1, #candidates)]
+                    ServerHopBtn.Text = "🚀 Saltando..."
+                    hopped = true
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, chosenId, LocalPlayer)
+                end
+            end
+        end
+        if not hopped then
+            ServerHopBtn.Text = "🚀 Saltando..."
+            pcall(function()
+                TeleportService:Teleport(game.PlaceId, LocalPlayer)
+            end)
+        end
+    end)
+end)
+
 local UnloadBtn = Instance.new("TextButton")
 UnloadBtn.Size = UDim2.new(1, 0, 0, 26)
 UnloadBtn.BackgroundColor3 = THEME.AccentRed
@@ -1688,6 +2109,7 @@ UnloadBtn.MouseButton1Click:Connect(function()
     if freeCamEnabled then toggleFreeCam(false) end
     if fullbrightEnabled then toggleFullbright(false) end
     if thirdPersonEnabled then toggleThirdPerson(false) end
+    if antiAfkEnabled then toggleAntiAfk(false) end
     if spectatingPlayer then resetSpectate() end
     RestoreMap()
 
@@ -1724,6 +2146,7 @@ local function DeletePartAt(mousePos)
             table.insert(deletedPartsMemory, {part = part, trans = part.Transparency, collide = part.CanCollide})
             part.Transparency = 1
             part.CanCollide = false
+            updateDeleteCounter()
         end
     end
 end
@@ -1750,6 +2173,8 @@ trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == keybinds.XRay then toggleFPXRay(not fpXRayEnabled) end
         if input.KeyCode == keybinds.ESP then toggleESP(not espEnabled) end
         if input.KeyCode == keybinds.InfJump then toggleInfJump(not infJumpEnabled) end
+        if input.KeyCode == keybinds.AntiAFK then toggleAntiAfk(not antiAfkEnabled) end
+        if input.KeyCode == keybinds.Undo then UndoLastDelete() end
         if input.KeyCode == keybinds.Restore then RestoreMap() end
         if input.KeyCode == keybinds.Teleport then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
         if input.KeyCode == keybinds.Delete then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
