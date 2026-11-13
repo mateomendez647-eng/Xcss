@@ -1,5 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v2.2 - Optimizado)
+-- Stealth Avanzado + Anti-Rubberband TP
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -31,8 +32,17 @@ local THEME = {
 
 local TWEEN_FAST = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
--- 🛡️ MÓDULO DE SIGILO (STEALTH)
+-- 🛡️ MÓDULO DE SIGILO (STEALTH) AVANZADO
 local Stealth = {}
+
+local _stealthSeed = tick() % 1000
+
+local function stealthName()
+    _stealthSeed = _stealthSeed + 1
+    local prefixes = {"Frame","TextLabel","ImageLabel","UICorner","UIStroke","ScrollingFrame","TextButton","ImageButton","ViewportFrame"}
+    return prefixes[math.random(1, #prefixes)] .. "_" .. string.format("%04x", math.random(0, 0xFFFF))
+end
+
 function Stealth.HideConnections(connection)
     if not connection then return connection end
     pcall(function()
@@ -53,7 +63,13 @@ end
 
 function Stealth.HideInstance(instance)
     if not instance then return end
-    pcall(function() instance.Name = "CoreUI_" .. math.random(1000, 9999) end)
+    pcall(function() instance.Name = stealthName() end)
+end
+
+function Stealth.RandomizeName(instance)
+    if instance and typeof(instance) == "Instance" then
+        pcall(function() instance.Name = stealthName() end)
+    end
 end
 
 -- Guardado y Carga
@@ -182,6 +198,7 @@ local keybinds = {
 -- Helper de bordes neón
 local function applyNeonStroke(parent, color, transparency, thickness)
     local stroke = Instance.new("UIStroke")
+    Stealth.RandomizeName(stroke)
     stroke.Color = color or THEME.AccentCyan
     stroke.Transparency = transparency or 0.45
     stroke.Thickness = thickness or 1
@@ -200,6 +217,7 @@ if not successParent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui
 
 -- Botón flotante principal (xcs)
 local MiniBtn = Instance.new("TextButton")
+Stealth.RandomizeName(MiniBtn)
 MiniBtn.Size = UDim2.new(0, 44, 0, 44)
 MiniBtn.Position = loadPosition("MiniBtn", UDim2.new(0, 15, 0, 200))
 MiniBtn.BackgroundColor3 = THEME.BgMain
@@ -215,6 +233,7 @@ applyNeonStroke(MiniBtn, THEME.AccentCyan, 0.2, 1.5)
 
 -- Botón flotante minimizado de TP Jugadores
 local MiniTpBtn = Instance.new("TextButton")
+Stealth.RandomizeName(MiniTpBtn)
 MiniTpBtn.Size = UDim2.new(0, 44, 0, 44)
 MiniTpBtn.Position = loadPosition("MiniTpBtn", UDim2.new(0, 68, 0, 200))
 MiniTpBtn.BackgroundColor3 = THEME.BgMain
@@ -242,6 +261,7 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
 applyNeonStroke(MainFrame, THEME.AccentCyan, 0.35, 1.3)
 
 local Title = Instance.new("TextButton")
+Stealth.RandomizeName(Title)
 Title.Size = UDim2.new(1, 0, 0, 30)
 Title.BackgroundColor3 = THEME.BgHeader
 Title.BackgroundTransparency = 0.15
@@ -255,6 +275,7 @@ Title.Parent = MainFrame
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 12)
 
 local HeaderDivider = Instance.new("Frame")
+Stealth.RandomizeName(HeaderDivider)
 HeaderDivider.Size = UDim2.new(1, 0, 0, 1)
 HeaderDivider.Position = UDim2.new(0, 0, 1, -1)
 HeaderDivider.BackgroundColor3 = THEME.AccentCyan
@@ -264,6 +285,7 @@ HeaderDivider.Parent = Title
 
 local function createHeaderBtn(text, offsetX, bgColor, textColor, textSize)
     local btn = Instance.new("TextButton")
+    Stealth.RandomizeName(btn)
     btn.Size = UDim2.new(0, 20, 0, 20)
     btn.Position = UDim2.new(1, offsetX, 0.5, -10)
     btn.BackgroundColor3 = bgColor
@@ -285,6 +307,7 @@ local SettingsBtn           = createHeaderBtn("⚙️", -50,  THEME.BgCard,     
 local MinimizeBtn           = createHeaderBtn("✕",  -26,  THEME.AccentRed,   THEME.TextMain, 10)
 
 local MainScroll = Instance.new("ScrollingFrame")
+Stealth.RandomizeName(MainScroll)
 MainScroll.Size = UDim2.new(1, 0, 1, -32)
 MainScroll.Position = UDim2.new(0, 0, 0, 32)
 MainScroll.BackgroundTransparency = 1
@@ -310,6 +333,7 @@ MainPadding.Parent = MainScroll
 -- Tarjeta Neon Glass con Switch animado por TweenService
 local function createNeonSwitch(parent, icon, text)
     local card = Instance.new("Frame")
+    Stealth.RandomizeName(card)
     card.Size = UDim2.new(1, 0, 0, 28)
     card.BackgroundColor3 = THEME.BgCard
     card.BackgroundTransparency = 0.25
@@ -319,6 +343,7 @@ local function createNeonSwitch(parent, icon, text)
     local stroke = applyNeonStroke(card, THEME.AccentCyan, 0.78, 1)
 
     local label = Instance.new("TextLabel")
+    Stealth.RandomizeName(label)
     label.Size = UDim2.new(0.74, 0, 1, 0)
     label.Position = UDim2.new(0, 9, 0, 0)
     label.BackgroundTransparency = 1
@@ -330,6 +355,7 @@ local function createNeonSwitch(parent, icon, text)
     label.Parent = card
 
     local bg = Instance.new("TextButton")
+    Stealth.RandomizeName(bg)
     bg.Size = UDim2.new(0, 32, 0, 16)
     bg.Position = UDim2.new(1, -40, 0.5, -8)
     bg.BackgroundColor3 = THEME.SwitchOff
@@ -339,6 +365,7 @@ local function createNeonSwitch(parent, icon, text)
     Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("Frame")
+    Stealth.RandomizeName(knob)
     knob.Size = UDim2.new(0, 12, 0, 12)
     knob.Position = UDim2.new(0, 2, 0.5, -6)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -395,6 +422,7 @@ local FreeCamSwitchBg, FreeCamSwitchKnob, FreeCamCard, FreeCamStroke = createNeo
 local FullbrightSwitchBg, FullbrightSwitchKnob, FullbrightCard, FullbrightStroke = createNeonSwitch(MainScroll, "☀️", "Fullbright")
 local ThirdPersonSwitchBg, ThirdPersonSwitchKnob, ThirdPersonCard, ThirdPersonStroke = createNeonSwitch(MainScroll, "🧍", "Third Person")
 
+
 -- 🎥 Lógica de Invisicam con Zoom Libre integrado
 local function toggleInvisicam(state)
     invisicamEnabled = state
@@ -450,6 +478,33 @@ local function toggleThirdPerson(state)
     end
 end
 
+-- ==========================================
+-- 🚀 SISTEMA DE TELEPORT ANTI-RUBBERBAND
+-- ==========================================
+local function SafeTeleport(targetCFrame)
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrp = char.HumanoidRootPart
+        
+        -- Detenemos la velocidad física para que el motor no intente predecir el movimiento a través de la pared
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        
+        -- Movemos el personaje usando PivotTo (mucho más seguro que cambiar el CFrame del HRP directo)
+        char:PivotTo(targetCFrame)
+        
+        -- Forzamos la actualización en el siguiente frame para combatir el anti-cheat interno de Roblox
+        task.spawn(function()
+            task.wait()
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                char:PivotTo(targetCFrame)
+            end
+        end)
+    end
+end
+
+
 -- 👥 Ventana de TP a Jugadores (Con Distancia y Botón Volver a Mí)
 local PlayerWindow = Instance.new("Frame")
 Stealth.HideInstance(PlayerWindow)
@@ -464,6 +519,7 @@ Instance.new("UICorner", PlayerWindow).CornerRadius = UDim.new(0, 12)
 applyNeonStroke(PlayerWindow, THEME.AccentCyan, 0.35, 1.3)
 
 local PlayerWindowTitle = Instance.new("TextButton")
+Stealth.RandomizeName(PlayerWindowTitle)
 PlayerWindowTitle.Size = UDim2.new(1, 0, 0, 28)
 PlayerWindowTitle.BackgroundColor3 = THEME.BgHeader
 PlayerWindowTitle.BackgroundTransparency = 0.15
@@ -477,6 +533,7 @@ PlayerWindowTitle.Parent = PlayerWindow
 Instance.new("UICorner", PlayerWindowTitle).CornerRadius = UDim.new(0, 12)
 
 local PlayerWindowMinBtn = Instance.new("TextButton")
+Stealth.RandomizeName(PlayerWindowMinBtn)
 PlayerWindowMinBtn.Size = UDim2.new(0, 19, 0, 19)
 PlayerWindowMinBtn.Position = UDim2.new(1, -46, 0.5, -9)
 PlayerWindowMinBtn.BackgroundColor3 = THEME.BgCard
@@ -489,6 +546,7 @@ Instance.new("UICorner", PlayerWindowMinBtn).CornerRadius = UDim.new(0, 5)
 applyNeonStroke(PlayerWindowMinBtn, THEME.AccentCyan, 0.5, 1)
 
 local PlayerWindowCloseBtn = Instance.new("TextButton")
+Stealth.RandomizeName(PlayerWindowCloseBtn)
 PlayerWindowCloseBtn.Size = UDim2.new(0, 19, 0, 19)
 PlayerWindowCloseBtn.Position = UDim2.new(1, -23, 0.5, -9)
 PlayerWindowCloseBtn.BackgroundColor3 = THEME.AccentRed
@@ -500,6 +558,7 @@ PlayerWindowCloseBtn.Parent = PlayerWindowTitle
 Instance.new("UICorner", PlayerWindowCloseBtn).CornerRadius = UDim.new(0, 5)
 
 local PlayerWindowScroll = Instance.new("ScrollingFrame")
+Stealth.RandomizeName(PlayerWindowScroll)
 PlayerWindowScroll.Size = UDim2.new(1, 0, 1, -30)
 PlayerWindowScroll.Position = UDim2.new(0, 0, 0, 30)
 PlayerWindowScroll.BackgroundTransparency = 1
@@ -523,6 +582,7 @@ PlayerWindowPadding.PaddingRight = UDim.new(0, 8)
 PlayerWindowPadding.Parent = PlayerWindowScroll
 
 local searchBox = Instance.new("TextBox")
+Stealth.RandomizeName(searchBox)
 searchBox.Size = UDim2.new(1, 0, 0, 24)
 searchBox.BackgroundColor3 = THEME.BgCard
 searchBox.BackgroundTransparency = 0.15
@@ -539,6 +599,7 @@ applyNeonStroke(searchBox, THEME.AccentCyan, 0.65, 1)
 
 -- Botón rápido para volver la cámara a tu personaje
 local ResetCamSelfBtn = Instance.new("TextButton")
+Stealth.RandomizeName(ResetCamSelfBtn)
 ResetCamSelfBtn.Size = UDim2.new(1, 0, 0, 22)
 ResetCamSelfBtn.BackgroundColor3 = THEME.BgCardOn
 ResetCamSelfBtn.Text = "🏠 Volver cámara a mí"
@@ -551,6 +612,7 @@ Instance.new("UICorner", ResetCamSelfBtn).CornerRadius = UDim.new(0, 6)
 applyNeonStroke(ResetCamSelfBtn, THEME.AccentGreen, 0.4, 1)
 
 local PlayerListContainer = Instance.new("Frame")
+Stealth.RandomizeName(PlayerListContainer)
 PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
 PlayerListContainer.AutomaticSize = Enum.AutomaticSize.Y
 PlayerListContainer.BackgroundTransparency = 1
@@ -563,10 +625,8 @@ PlayerListLayout.Parent = PlayerListContainer
 
 local function teleportToPlayer(targetPlayer)
     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-        end
+        -- Teleportamos un poco por encima para asegurar que no se atasque en el piso
+        SafeTeleport(targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3.5, 0))
     end
 end
 
@@ -615,6 +675,7 @@ refreshPlayerList = function()
 
             if filterQuery == "" or string.find(string.lower(displayName), string.lower(filterQuery)) or string.find(string.lower(userName), string.lower(filterQuery)) then
                 local row = Instance.new("Frame")
+                Stealth.RandomizeName(row)
                 row.Size = UDim2.new(1, 0, 0, 30)
                 row.BackgroundColor3 = THEME.BgCard
                 row.BackgroundTransparency = 0.3
@@ -623,6 +684,7 @@ refreshPlayerList = function()
                 applyNeonStroke(row, isFriend and Color3.fromRGB(255, 215, 0) or THEME.AccentCyan, 0.8, 1)
 
                 local thumbImg = Instance.new("ImageLabel")
+                Stealth.RandomizeName(thumbImg)
                 thumbImg.Size = UDim2.new(0, 22, 0, 22)
                 thumbImg.Position = UDim2.new(0, 4, 0.5, -11)
                 thumbImg.BackgroundColor3 = THEME.BgHeader
@@ -646,6 +708,7 @@ refreshPlayerList = function()
                 end)
 
                 local pNameLabel = Instance.new("TextLabel")
+                Stealth.RandomizeName(pNameLabel)
                 pNameLabel.Size = UDim2.new(0.45, 0, 0, 14)
                 pNameLabel.Position = UDim2.new(0, 30, 0, 2)
                 pNameLabel.BackgroundTransparency = 1
@@ -658,6 +721,7 @@ refreshPlayerList = function()
                 pNameLabel.Parent = row
 
                 local distLabel = Instance.new("TextLabel")
+                Stealth.RandomizeName(distLabel)
                 distLabel.Size = UDim2.new(0.45, 0, 0, 11)
                 distLabel.Position = UDim2.new(0, 30, 0, 16)
                 distLabel.BackgroundTransparency = 1
@@ -670,6 +734,7 @@ refreshPlayerList = function()
                 playerDistanceLabels[p] = distLabel
 
                 local tpBtn = Instance.new("TextButton")
+                Stealth.RandomizeName(tpBtn)
                 tpBtn.Size = UDim2.new(0, 24, 0, 18)
                 tpBtn.Position = UDim2.new(1, -58, 0.5, -9)
                 tpBtn.BackgroundColor3 = THEME.AccentCyan
@@ -682,6 +747,7 @@ refreshPlayerList = function()
                 tpBtn.MouseButton1Click:Connect(function() teleportToPlayer(p) end)
 
                 local viewBtn = Instance.new("TextButton")
+                Stealth.RandomizeName(viewBtn)
                 viewBtn.Size = UDim2.new(0, 28, 0, 18)
                 viewBtn.Position = UDim2.new(1, -31, 0.5, -9)
                 viewBtn.BackgroundColor3 = (spectatingPlayer == p) and THEME.AccentGreen or THEME.SwitchOff
@@ -700,7 +766,7 @@ refreshPlayerList = function()
     end
 end
 
--- Actualizador ligero de distancias (solo cuando PlayerWindow está visible)
+-- Actualizador ligero de distancias
 task.spawn(function()
     while not hubUnloaded do
         if PlayerWindow.Visible then
@@ -749,6 +815,7 @@ Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 12)
 applyNeonStroke(SettingsFrame, THEME.AccentCyan, 0.35, 1.3)
 
 local SettingsTitle = Instance.new("TextButton")
+Stealth.RandomizeName(SettingsTitle)
 SettingsTitle.Size = UDim2.new(1, 0, 0, 28)
 SettingsTitle.BackgroundColor3 = THEME.BgHeader
 SettingsTitle.BackgroundTransparency = 0.15
@@ -762,6 +829,7 @@ SettingsTitle.Parent = SettingsFrame
 Instance.new("UICorner", SettingsTitle).CornerRadius = UDim.new(0, 12)
 
 local CloseSettingsBtn = Instance.new("TextButton")
+Stealth.RandomizeName(CloseSettingsBtn)
 CloseSettingsBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseSettingsBtn.Position = UDim2.new(1, -25, 0.5, -10)
 CloseSettingsBtn.BackgroundColor3 = THEME.AccentRed
@@ -774,6 +842,7 @@ CloseSettingsBtn.Parent = SettingsTitle
 Instance.new("UICorner", CloseSettingsBtn).CornerRadius = UDim.new(0, 5)
 
 local SettingsScroll = Instance.new("ScrollingFrame")
+Stealth.RandomizeName(SettingsScroll)
 SettingsScroll.Size = UDim2.new(1, 0, 1, -30)
 SettingsScroll.Position = UDim2.new(0, 0, 0, 30)
 SettingsScroll.BackgroundTransparency = 1
@@ -797,7 +866,7 @@ SettingsPadding.PaddingRight = UDim.new(0, 8)
 SettingsPadding.Parent = SettingsScroll
 
 -- ==========================================
--- 🎯 LÓGICA DE ESP OPTIMIZADA (POR EVENTOS, CERO LAG)
+-- 🎯 LÓGICA DE ESP OPTIMIZADA
 -- ==========================================
 local function applyHighlightToCharacter(plr, char)
     if not espEnabled or plr == LocalPlayer or not char then return end
@@ -805,7 +874,7 @@ local function applyHighlightToCharacter(plr, char)
         espHighlights[plr]:Destroy()
     end
     local hl = Instance.new("Highlight")
-    hl.Name = "CoreUI_HL"
+    Stealth.RandomizeName(hl)
     hl.FillColor = Color3.fromRGB(255, 0, 80)
     hl.OutlineColor = Color3.fromRGB(255, 255, 255)
     hl.FillTransparency = 0.5
@@ -860,7 +929,7 @@ trackConn(Players.PlayerRemoving:Connect(function(plr)
 end))
 
 -- ==========================================
--- 👻 NOCLIP OPTIMIZADO (CON CACHÉ DE PARTES)
+-- 👻 NOCLIP OPTIMIZADO
 -- ==========================================
 local function cacheCharacterParts(char)
     cachedCharParts = {}
@@ -1031,7 +1100,7 @@ end
 local toggleFreeCam
 
 -- ==========================================
--- 🕊️ FLY MODERNO (LinearVelocity + AlignOrientation)
+-- 🕊️ FLY MODERNO
 -- ==========================================
 local function cleanupFlyPhysics()
     if flyConnection then flyConnection:Disconnect(); flyConnection = nil end
@@ -1060,11 +1129,11 @@ local function toggleFly(state)
         if hum then hum.PlatformStand = true end
 
         flyAttachment = Instance.new("Attachment")
-        flyAttachment.Name = "CoreUI_Att"
+        Stealth.RandomizeName(flyAttachment)
         flyAttachment.Parent = hrp
 
         flyLinearVel = Instance.new("LinearVelocity")
-        flyLinearVel.Name = "CoreUI_LV"
+        Stealth.RandomizeName(flyLinearVel)
         flyLinearVel.Attachment0 = flyAttachment
         flyLinearVel.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
         flyLinearVel.MaxForce = math.huge
@@ -1072,7 +1141,7 @@ local function toggleFly(state)
         flyLinearVel.Parent = hrp
 
         flyAlignOri = Instance.new("AlignOrientation")
-        flyAlignOri.Name = "CoreUI_AO"
+        Stealth.RandomizeName(flyAlignOri)
         flyAlignOri.Attachment0 = flyAttachment
         flyAlignOri.Mode = Enum.OrientationAlignmentMode.OneAttachment
         flyAlignOri.RigidityEnabled = true
@@ -1228,6 +1297,7 @@ makeDraggable(PlayerWindowTitle, PlayerWindow, "PlayerWindow")
 -- Botones Flotantes Rápidos (Neon Glass)
 local function createQuickBtn(name, text, initialPos, toggleFunc)
     local btn = Instance.new("TextButton")
+    Stealth.RandomizeName(btn)
     btn.Size = UDim2.new(0, 36, 0, 36)
     btn.Position = loadPosition("Quick_" .. name, initialPos)
     btn.BackgroundColor3 = THEME.BgMain
@@ -1305,6 +1375,7 @@ createQuickBtn("ThirdPerson", "3PS", UDim2.new(0, 260, 0, 145), function() toggl
 
 -- Botón Restaurar Flotante (RST)
 local RestoreQuickBtn = Instance.new("TextButton")
+Stealth.RandomizeName(RestoreQuickBtn)
 RestoreQuickBtn.Size = UDim2.new(0, 36, 0, 36)
 RestoreQuickBtn.Position = loadPosition("Quick_Restore", UDim2.new(0, 60, 0, 190))
 RestoreQuickBtn.BackgroundColor3 = THEME.BgMain
@@ -1399,6 +1470,7 @@ end)
 -- ==========================================
 local function createSectionTitle(titleText)
     local lbl = Instance.new("TextLabel")
+    Stealth.RandomizeName(lbl)
     lbl.Size = UDim2.new(1, 0, 0, 18)
     lbl.BackgroundTransparency = 1
     lbl.Text = titleText
@@ -1432,6 +1504,7 @@ end
 
 local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minVal, maxVal, currentVal, callback)
     local card = Instance.new("Frame")
+    Stealth.RandomizeName(card)
     card.Size = UDim2.new(1, 0, 0, 54)
     card.BackgroundColor3 = THEME.BgCard
     card.BackgroundTransparency = 0.25
@@ -1441,6 +1514,7 @@ local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minV
     local stroke = applyNeonStroke(card, THEME.AccentCyan, 0.78, 1)
 
     local titleLbl = Instance.new("TextLabel")
+    Stealth.RandomizeName(titleLbl)
     titleLbl.Size = UDim2.new(0.74, 0, 0, 26)
     titleLbl.Position = UDim2.new(0, 9, 0, 0)
     titleLbl.BackgroundTransparency = 1
@@ -1452,6 +1526,7 @@ local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minV
     titleLbl.Parent = card
 
     local bg = Instance.new("TextButton")
+    Stealth.RandomizeName(bg)
     bg.Size = UDim2.new(0, 32, 0, 16)
     bg.Position = UDim2.new(1, -40, 0, 5)
     bg.BackgroundColor3 = THEME.SwitchOff
@@ -1461,6 +1536,7 @@ local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minV
     Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("Frame")
+    Stealth.RandomizeName(knob)
     knob.Size = UDim2.new(0, 12, 0, 12)
     knob.Position = UDim2.new(0, 2, 0.5, -6)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -1486,6 +1562,7 @@ local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minV
 
     local clampedInit = math.clamp(currentVal, minVal, maxVal)
     local label = Instance.new("TextLabel")
+    Stealth.RandomizeName(label)
     label.Size = UDim2.new(1, -18, 0, 12)
     label.Position = UDim2.new(0, 9, 0, 26)
     label.BackgroundTransparency = 1
@@ -1497,6 +1574,7 @@ local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minV
     label.Parent = card
 
     local barBg = Instance.new("TextButton")
+    Stealth.RandomizeName(barBg)
     barBg.Size = UDim2.new(1, -18, 0, 6)
     barBg.Position = UDim2.new(0, 9, 0, 41)
     barBg.BackgroundColor3 = THEME.SwitchOff
@@ -1506,6 +1584,7 @@ local function createSliderSwitch(btnName, switchText, sliderText, saveKey, minV
     Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
+    Stealth.RandomizeName(fill)
     fill.Size = UDim2.new((clampedInit - minVal) / (maxVal - minVal), 0, 1, 0)
     fill.BackgroundColor3 = THEME.AccentCyan
     fill.Parent = barBg
@@ -1600,6 +1679,7 @@ createSectionTitle("  ATAJOS DE TECLADO (PC)")
 
 local function createKeybindBox(text, keyName)
     local card = Instance.new("Frame")
+    Stealth.RandomizeName(card)
     card.Size = UDim2.new(1, 0, 0, 24)
     card.BackgroundColor3 = THEME.BgCard
     card.BackgroundTransparency = 0.25
@@ -1608,6 +1688,7 @@ local function createKeybindBox(text, keyName)
     applyNeonStroke(card, THEME.AccentCyan, 0.82, 1)
 
     local label = Instance.new("TextLabel")
+    Stealth.RandomizeName(label)
     label.Size = UDim2.new(0.65, 0, 1, 0)
     label.Position = UDim2.new(0, 9, 0, 0)
     label.BackgroundTransparency = 1
@@ -1619,6 +1700,7 @@ local function createKeybindBox(text, keyName)
     label.Parent = card
 
     local box = Instance.new("TextButton")
+    Stealth.RandomizeName(box)
     box.Size = UDim2.new(0, 44, 0, 18)
     box.Position = UDim2.new(1, -50, 0.5, -9)
     box.BackgroundColor3 = THEME.BgHeader
@@ -1667,6 +1749,7 @@ createKeybindBox("Tecla Restaurar", "Restore")
 -- 🛑 BOTÓN UNLOAD (CERRAR Y LIMPIAR TODO EL SCRIPT)
 createSectionTitle("  SISTEMA")
 local UnloadBtn = Instance.new("TextButton")
+Stealth.RandomizeName(UnloadBtn)
 UnloadBtn.Size = UDim2.new(1, 0, 0, 26)
 UnloadBtn.BackgroundColor3 = THEME.AccentRed
 UnloadBtn.BackgroundTransparency = 0.15
@@ -1732,10 +1815,7 @@ local function TeleportAt(mousePos)
     local ray = Camera:ScreenPointToRay(mousePos.X, mousePos.Y)
     local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
     if result then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
-        end
+        SafeTeleport(CFrame.new(result.Position + Vector3.new(0, 3.5, 0)))
     end
 end
 
