@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.6.1 - Ultra Stealth & Modular / TP & Delete Fixed)
--- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Fix Raycast
+-- HUB: xcs (Neon Glass v3.6.2 - Ultra Stealth & Modular / TP Precision Fixed)
+-- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Fix Raycast ScreenPoint
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -1736,7 +1736,7 @@ do
 
     local header = Stealth.New("TextButton", mainFrame)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.6.1"
+    header.Text = "   ◈ xcs Hub  v3.6.2"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -3534,7 +3534,7 @@ end
 task.wait()
 
 -- ==========================================
--- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES (CORREGIDO Y OPTIMIZADO)
+-- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES (PRECISIÓN TP CORREGIDA)
 -- ==========================================
 do
     local function makeDraggable(dragHandle, targetFrame, saveKey, respectLock)
@@ -3579,6 +3579,7 @@ do
     local function createQuickBtn(name, shortText, onClick, isActionBtn)
         local btn = Stealth.New("TextButton", UI.ScreenGui)
         btn.Size = UDim2.new(0, 36, 0, 36)
+        btn.Position = getSavedUDim2("Quick_" + name) -- safe
         btn.Position = getSavedUDim2("Quick_" .. name)
         btn.BackgroundTransparency = 0.15
         btn.Text = shortText
@@ -3693,7 +3694,7 @@ do
         UI.MiniBtn.Visible = false
     end)
 
-    -- 🎯 Raycast e Inputs Corregidos (ViewportPointToRay + GetMouseLocation)
+    -- 🎯 Raycast de Alta Precisión (ScreenPointToRay con offset de barra superior e Inset)
     local function raycastIgnoringDeleted(origin, direction)
         local filter = {LocalPlayer.Character, Camera}
         for _, p in ipairs(Services.Players:GetPlayers()) do
@@ -3709,8 +3710,8 @@ do
     end
 
     local function DeletePartAt(screenPos)
-        local ray = Camera:ViewportPointToRay(screenPos.X, screenPos.Y)
-        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
+        local ray = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 10000)
         local part = result and result.Instance
         if part and part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
             table.insert(Modules.deletedPartsMemory, {part = part, trans = part.Transparency, collide = part.CanCollide})
@@ -3720,10 +3721,10 @@ do
     end
 
     local function TeleportAt(screenPos)
-        local ray = Camera:ViewportPointToRay(screenPos.X, screenPos.Y)
-        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
+        local ray = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 10000)
         if result then
-            Funcs.SafeTeleport(CFrame.new(result.Position + Vector3.new(0, 3.5, 0)))
+            Funcs.SafeTeleport(CFrame.new(result.Position + Vector3.new(0, 3, 0)))
         end
     end
 
