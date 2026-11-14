@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + ESP Labels
+-- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + Server Hop
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -309,7 +309,6 @@ local State = {
     Invisicam = false,
     FPXRay = false,
     ESP = false,
-    ESPLabels = false,
     DeleteMode = false,
     Noclip = false,
     InfJump = false,
@@ -325,7 +324,7 @@ local hubUnloaded = false
 local listeningFor = nil
 local spectatingPlayer = nil
 local filterQuery = ""
-local playersSubView = "Server"
+local playersSubView = "Server" -- "Server" o "Friends"
 
 local QuickButtons = {}
 local QuickButtonStrokes = {}
@@ -346,7 +345,6 @@ local fpXRayConnection, invisicamConnection, thirdPersonConnection = nil, nil, n
 local transparentParts = {}
 local deletedPartsMemory = {}
 local espHighlights = {}
-local espBillboards = {}
 local espCharConnections = {}
 local freeCamConnection, freeCamRotateConnection = nil, nil
 local camYaw, camPitch = 0, 0
@@ -648,18 +646,6 @@ local function SafeTeleport(targetCFrame)
 end
 
 -- ==========================================
--- 🖼️ INTERFAZ BASE (SCREENGUI)
--- ==========================================
-local ScreenGui = Instance.new("ScreenGui")
-Stealth.RandomizeName(ScreenGui)
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
-if not pcall(function() ScreenGui.Parent = CoreGui end) then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
-HubMaid:GiveTask(ScreenGui)
-
--- ==========================================
 -- 🎮 LÓGICA DE FUNCIONES DEL HUB
 -- ==========================================
 local function syncQuickBtnVisual(key, enabled)
@@ -791,7 +777,6 @@ local function toggleThirdPerson(state)
     end
 end
 
--- 🎯 ESP (Highlight + Etiquetas independientes de Nombre, Vida y Distancia)
 local function applyHighlightToCharacter(plr, char)
     if not State.ESP or plr == LocalPlayer or not char then return end
     if espHighlights[plr] and espHighlights[plr].Parent then
@@ -808,73 +793,16 @@ local function applyHighlightToCharacter(plr, char)
     espHighlights[plr] = hl
 end
 
-local function applyBillboardToCharacter(plr, char)
-    if not State.ESPLabels or plr == LocalPlayer or not char then return end
-    local adorneePart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-    if not adorneePart then return end
-
-    if espBillboards[plr] and espBillboards[plr].Gui and espBillboards[plr].Gui.Parent then
-        espBillboards[plr].Gui.Adornee = adorneePart
-        return
-    end
-
-    local isFriend = false
-    pcall(function() isFriend = LocalPlayer:IsFriendsWith(plr.UserId) end)
-
-    local bb = Instance.new("BillboardGui")
-    Stealth.RandomizeName(bb)
-    bb.Size = UDim2.new(0, 150, 0, 34)
-    bb.StudsOffset = Vector3.new(0, 2.7, 0)
-    bb.AlwaysOnTop = true
-    bb.ResetOnSpawn = false
-    bb.Adornee = adorneePart
-    bb.Parent = ScreenGui
-
-    local nameLbl = Instance.new("TextLabel")
-    Stealth.RandomizeName(nameLbl)
-    nameLbl.Size = UDim2.new(1, 0, 0, 16)
-    nameLbl.Position = UDim2.new(0, 0, 0, 0)
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.Text = (isFriend and "⭐ " or "") .. plr.DisplayName
-    nameLbl.TextColor3 = isFriend and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(255, 255, 255)
-    nameLbl.TextStrokeColor3 = Color3.fromRGB(10, 12, 18)
-    nameLbl.TextStrokeTransparency = 0.2
-    nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 11
-    nameLbl.Parent = bb
-
-    local infoLbl = Instance.new("TextLabel")
-    Stealth.RandomizeName(infoLbl)
-    infoLbl.Size = UDim2.new(1, 0, 0, 14)
-    infoLbl.Position = UDim2.new(0, 0, 0, 16)
-    infoLbl.BackgroundTransparency = 1
-    infoLbl.Text = "HP: --  •  -- m"
-    infoLbl.TextColor3 = Color3.fromRGB(120, 240, 180)
-    infoLbl.TextStrokeColor3 = Color3.fromRGB(10, 12, 18)
-    infoLbl.TextStrokeTransparency = 0.25
-    infoLbl.Font = Enum.Font.GothamMedium
-    infoLbl.TextSize = 10
-    infoLbl.Parent = bb
-
-    espBillboards[plr] = {
-        Gui = bb,
-        NameLabel = nameLbl,
-        InfoLabel = infoLbl
-    }
-end
-
 local function setupPlayerESP(plr)
     if plr == LocalPlayer then return end
     if espCharConnections[plr] then espCharConnections[plr]:Disconnect() end
     espCharConnections[plr] = plr.CharacterAdded:Connect(function(char)
         rebuildXRayFilter()
-        task.wait(0.25)
+        task.wait(0.2)
         if State.ESP then applyHighlightToCharacter(plr, char) end
-        if State.ESPLabels then applyBillboardToCharacter(plr, char) end
     end)
-    if plr.Character then
-        if State.ESP then applyHighlightToCharacter(plr, plr.Character) end
-        if State.ESPLabels then applyBillboardToCharacter(plr, plr.Character) end
+    if State.ESP and plr.Character then
+        applyHighlightToCharacter(plr, plr.Character)
     end
 end
 
@@ -892,62 +820,6 @@ local function toggleESP(state)
         table.clear(espHighlights)
     end
 end
-
-local function toggleESPLabels(state)
-    State.ESPLabels = state
-    if state then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            setupPlayerESP(plr)
-        end
-    else
-        for _, data in pairs(espBillboards) do
-            if data.Gui and data.Gui.Parent then
-                data.Gui:Destroy()
-            end
-        end
-        table.clear(espBillboards)
-    end
-end
-
--- Bucle ligero de actualización para las etiquetas ESP (HP y Distancia)
-task.spawn(function()
-    while not hubUnloaded do
-        if State.ESPLabels then
-            local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            for plr, data in pairs(espBillboards) do
-                local char = plr.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                local head = char and char:FindFirstChild("Head")
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-
-                if data.Gui and data.Gui.Parent then
-                    if head or hrp then
-                        data.Gui.Enabled = true
-                        data.Gui.Adornee = head or hrp
-                        local hp = hum and math.max(0, math.floor(hum.Health)) or 0
-                        local maxHp = hum and math.max(1, math.floor(hum.MaxHealth)) or 100
-                        local distStr = (myHrp and hrp) and (math.floor((myHrp.Position - hrp.Position).Magnitude) .. "m") or "--"
-                        data.InfoLabel.Text = string.format("♥ %d/%d  •  %s", hp, maxHp, distStr)
-
-                        local ratio = hp / maxHp
-                        if ratio > 0.5 then
-                            data.InfoLabel.TextColor3 = Color3.fromRGB(110, 240, 175)
-                        elseif ratio > 0.25 then
-                            data.InfoLabel.TextColor3 = Color3.fromRGB(250, 200, 75)
-                        else
-                            data.InfoLabel.TextColor3 = Color3.fromRGB(255, 95, 110)
-                        end
-                    else
-                        data.Gui.Enabled = false
-                    end
-                end
-            end
-            task.wait(0.15)
-        else
-            task.wait(0.35)
-        end
-    end
-end)
 
 local function cacheCharacterParts(char)
     table.clear(cachedCharParts)
@@ -1260,6 +1132,15 @@ end
 -- ==========================================
 -- 🖼️ INTERFAZ MODULAR NEON GLASS v3.0
 -- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+Stealth.RandomizeName(ScreenGui)
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+if not pcall(function() ScreenGui.Parent = CoreGui end) then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+HubMaid:GiveTask(ScreenGui)
+
 local function applyNeonStroke(parent, color, transparency, thickness)
     local stroke = Instance.new("UIStroke")
     Stealth.RandomizeName(stroke)
@@ -1818,13 +1699,12 @@ local flySlider = TabMove:AddSlider({
 
 -- --- PESTAÑA 2: VISUALES, CÁMARA E INTERACCIÓN ---
 TabVisuals:AddSection("Cámara y Visión")
-TabVisuals:AddToggle({ Key = "ESP",         Icon = "🎯", Title = "ESP Jugadores",                Callback = toggleESP })
-TabVisuals:AddToggle({ Key = "ESPLabels",   Icon = "🏷️", Title = "Etiquetas ESP (Nombre/HP/m)", Callback = toggleESPLabels })
-TabVisuals:AddToggle({ Key = "Invisicam",   Icon = "👁️", Title = "Invisicam + Zoom",             Callback = toggleInvisicam })
-TabVisuals:AddToggle({ Key = "FPXRay",      Icon = "🧱", Title = "FP X-Ray (Paredes)",           Callback = toggleFPXRay })
-TabVisuals:AddToggle({ Key = "Fullbright",  Icon = "☀️", Title = "Fullbright",                   Callback = toggleFullbright })
-TabVisuals:AddToggle({ Key = "ThirdPerson", Icon = "🧍", Title = "Third Person Forzado",         Callback = toggleThirdPerson })
-TabVisuals:AddToggle({ Key = "FreeCam",     Icon = "🎥", Title = "Free Cam",                     Callback = toggleFreeCam })
+TabVisuals:AddToggle({ Key = "ESP",         Icon = "🎯", Title = "ESP Jugadores",       Callback = toggleESP })
+TabVisuals:AddToggle({ Key = "Invisicam",   Icon = "👁️", Title = "Invisicam + Zoom",    Callback = toggleInvisicam })
+TabVisuals:AddToggle({ Key = "FPXRay",      Icon = "🧱", Title = "FP X-Ray (Paredes)",  Callback = toggleFPXRay })
+TabVisuals:AddToggle({ Key = "Fullbright",  Icon = "☀️", Title = "Fullbright",          Callback = toggleFullbright })
+TabVisuals:AddToggle({ Key = "ThirdPerson", Icon = "🧍", Title = "Third Person Forzado",Callback = toggleThirdPerson })
+TabVisuals:AddToggle({ Key = "FreeCam",     Icon = "🎥", Title = "Free Cam",            Callback = toggleFreeCam })
 
 local freeCamSlider = TabVisuals:AddSlider({
     Title = "Velocidad Free Cam", Min = 10, Max = 300, Default = Config.FreeCamSpeed,
@@ -1953,7 +1833,7 @@ FriendsListLayout.Parent = FriendsListContainer
 local playerCards = {}
 local friendCards = {}
 
--- 🔇 SISTEMA DE SILENCIO DE JUGADORES
+-- 🔇 SISTEMA DE SILENCIO DE JUGADORES (VOICE CHAT + SONIDOS DE PERSONAJE)
 local mutedPlayers = {}
 local muteAllActive = false
 local originalSoundVolumes = setmetatable({}, { __mode = "k" })
@@ -1962,6 +1842,7 @@ local muteCharConns = {}
 local function applyAudioMuteState(plr, isMuted)
     if not plr or plr == LocalPlayer then return end
 
+    -- 1) Chat de voz moderno (AudioDeviceInput)
     for _, inst in ipairs(plr:GetDescendants()) do
         if inst:IsA("AudioDeviceInput") then
             pcall(function() inst.Muted = isMuted end)
@@ -1973,6 +1854,7 @@ local function applyAudioMuteState(plr, isMuted)
         end
     end
 
+    -- 2) Chat de voz interno (VoiceChatInternal)
     pcall(function()
         local vci = game:GetService("VoiceChatInternal")
         if vci and vci.SubscribePause then
@@ -1980,6 +1862,7 @@ local function applyAudioMuteState(plr, isMuted)
         end
     end)
 
+    -- 3) Sonidos de personaje / herramientas (boombox, audios locales)
     local function handleSound(snd)
         if snd:IsA("Sound") then
             if isMuted then
@@ -2822,7 +2705,6 @@ TabConfig:AddButton({
 })
 
 TabConfig:AddSection("Botones Flotantes Rápidos")
-
 local quickSpecs = {
     {Key = "TPS",             Label = "Botón TPS (Toque)",     TouchOnly = true},
     {Key = "Invisicam",       Label = "Botón Invisicam (INV)"},
@@ -2887,7 +2769,6 @@ TabConfig:AddButton({
         if State.Invisicam then toggleInvisicam(false) end
         if State.FPXRay then toggleFPXRay(false) end
         if State.ESP then toggleESP(false) end
-        if State.ESPLabels then toggleESPLabels(false) end
         if State.Noclip then toggleNoclip(false) end
         if State.Fly then toggleFly(false) end
         if State.FreeCam then toggleFreeCam(false) end
@@ -3189,10 +3070,6 @@ HubMaid:GiveTask(Players.PlayerRemoving:Connect(function(plr)
     if espCharConnections[plr] then espCharConnections[plr]:Disconnect(); espCharConnections[plr] = nil end
     if muteCharConns[plr] then muteCharConns[plr]:Disconnect(); muteCharConns[plr] = nil end
     if espHighlights[plr] then espHighlights[plr]:Destroy(); espHighlights[plr] = nil end
-    if espBillboards[plr] then
-        if espBillboards[plr].Gui then espBillboards[plr].Gui:Destroy() end
-        espBillboards[plr] = nil
-    end
     if playerCards[plr] then
         playerCards[plr].Row:Destroy()
         playerCards[plr] = nil
