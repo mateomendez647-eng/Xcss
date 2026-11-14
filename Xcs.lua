@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.3 - Safe Boot & Modular)
--- Hitbox Expander + Waypoints por PlaceId + Lock Buttons + ESP Info + Mute + Join Friends + Server Hop
+-- HUB: xcs (Neon Glass v3.2 - Safe Boot & Modular)
+-- Waypoints por PlaceId (JSON) + Lock Buttons + ESP Info + Mute + Join Friends + Server Hop
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -179,8 +179,6 @@ local function buildDefaultProfile()
         UiScale = 1.0,
         FlySpeed = 50,
         FreeCamSpeed = 50,
-        HitboxSize = 8,
-        HitboxTransparency = 0.70,
         AntiAFK = true,
         FPSBooster = false,
         LockButtons = false,
@@ -300,7 +298,6 @@ local State = {
     TPS = false, Invisicam = false, FPXRay = false, ESP = false,
     DeleteMode = false, Noclip = false, InfJump = false, Fly = false,
     FreeCam = false, Fullbright = false, ThirdPerson = false, InstantInteract = false,
-    HitboxExpander = false,
 }
 
 local Runtime = {
@@ -364,7 +361,6 @@ local Modules = {
     mutedPlayers = {},
     originalSoundVolumes = setmetatable({}, { __mode = "k" }),
     muteCharConns = {},
-    originalHitboxProps = setmetatable({}, { __mode = "k" }),
     playerCards = {},
     friendCards = {},
 }
@@ -391,7 +387,6 @@ local function unloadHub()
     if State.Fullbright and Funcs.toggleFullbright then Funcs.toggleFullbright(false) end
     if State.ThirdPerson and Funcs.toggleThirdPerson then Funcs.toggleThirdPerson(false) end
     if State.InstantInteract and Funcs.toggleInstantInteract then Funcs.toggleInstantInteract(false) end
-    if State.HitboxExpander and Funcs.toggleHitboxExpander then Funcs.toggleHitboxExpander(false) end
 
     if Config.FPSBooster and Funcs.toggleFPSBooster then
         Funcs.toggleFPSBooster(false)
@@ -728,7 +723,7 @@ do
 end
 
 -- ==========================================
--- 🎮 MÓDULO DE FUNCIONES CORE (MOVIMIENTO, VISUALES Y HITBOX)
+-- 🎮 MÓDULO DE FUNCIONES CORE (MOVIMIENTO Y VISUALES)
 -- ==========================================
 do
     function Funcs.rebuildXRayFilter()
@@ -785,67 +780,6 @@ do
             ToggleUpdaters[key](enabled, skipCallback)
         else
             Funcs.syncQuickBtnVisual(key, enabled)
-        end
-    end
-
-    -- Hitbox Expander
-    function Funcs.applyHitboxToPlayer(plr)
-        if not State.HitboxExpander or plr == LocalPlayer then return end
-        local char = plr.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp or not hrp:IsA("BasePart") then return end
-
-        if not Modules.originalHitboxProps[hrp] then
-            Modules.originalHitboxProps[hrp] = {
-                Size = hrp.Size,
-                Transparency = hrp.Transparency,
-                Material = hrp.Material,
-                Color = hrp.Color,
-                CanCollide = hrp.CanCollide,
-            }
-        end
-
-        local s = Config.HitboxSize or 8
-        local targetSize = Vector3.new(s, s, s)
-        local targetTrans = Config.HitboxTransparency or 0.70
-
-        if hrp.Size ~= targetSize then hrp.Size = targetSize end
-        if math.abs(hrp.Transparency - targetTrans) > 0.005 then hrp.Transparency = targetTrans end
-        if hrp.Material ~= Enum.Material.Neon then hrp.Material = Enum.Material.Neon end
-        if hrp.Color ~= THEME.Accent then hrp.Color = THEME.Accent end
-        if hrp.CanCollide then hrp.CanCollide = false end
-    end
-
-    function Funcs.refreshAllHitboxes()
-        if not State.HitboxExpander then return end
-        for _, plr in ipairs(Services.Players:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                Funcs.applyHitboxToPlayer(plr)
-            end
-        end
-    end
-
-    function Funcs.restoreAllHitboxes()
-        for hrp, orig in pairs(Modules.originalHitboxProps) do
-            if hrp and hrp.Parent then
-                pcall(function()
-                    hrp.Size = orig.Size
-                    hrp.Transparency = orig.Transparency
-                    hrp.Material = orig.Material
-                    hrp.Color = orig.Color
-                    hrp.CanCollide = orig.CanCollide
-                end)
-            end
-        end
-        Modules.originalHitboxProps = setmetatable({}, { __mode = "k" })
-    end
-
-    function Funcs.toggleHitboxExpander(state)
-        State.HitboxExpander = state
-        if state then
-            Funcs.refreshAllHitboxes()
-        else
-            Funcs.restoreAllHitboxes()
         end
     end
 
@@ -1084,23 +1018,17 @@ do
         end)
     end
 
-    function Funcs.setupPlayerTracker(plr)
+    function Funcs.setupPlayerESP(plr)
         if plr == LocalPlayer then return end
         if Modules.espCharConns[plr] then Stealth.Disconnect(Modules.espCharConns[plr]) end
         Modules.espCharConns[plr] = plr.CharacterAdded:Connect(function(char)
             Funcs.rebuildXRayFilter()
             task.wait(0.2)
             if State.ESP then Funcs.applyESPToCharacter(plr, char) end
-            if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
         end)
-        if plr.Character then
-            if State.ESP then Funcs.applyESPToCharacter(plr, plr.Character) end
-            if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
+        if State.ESP and plr.Character then
+            Funcs.applyESPToCharacter(plr, plr.Character)
         end
-    end
-
-    for _, plr in ipairs(Services.Players:GetPlayers()) do
-        Funcs.setupPlayerTracker(plr)
     end
 
     function Funcs.toggleESP(state)
@@ -1108,7 +1036,7 @@ do
         Funcs.syncQuickBtnVisual("ESP", state)
         if state then
             for _, plr in ipairs(Services.Players:GetPlayers()) do
-                Funcs.setupPlayerTracker(plr)
+                Funcs.setupPlayerESP(plr)
             end
         else
             for _, hl in pairs(Modules.espHighlights) do
@@ -1127,10 +1055,7 @@ do
             if State.ESP then
                 Funcs.refreshESPBillboards()
             end
-            if State.HitboxExpander then
-                Funcs.refreshAllHitboxes()
-            end
-            task.wait(0.18)
+            task.wait(0.15)
         end
     end)
 
@@ -1468,7 +1393,7 @@ do
     local header = Instance.new("TextButton")
     Stealth.RandomizeName(header)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.3"
+    header.Text = "   ◈ xcs Hub  v3.2"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -1805,7 +1730,7 @@ do
                 end
             end))
 
-            return { Set = function(v) setSliderValue(v, false) end, Card = card }
+            return { Set = function(v) setSliderValue(v, false) end }
         end
 
         function TabObj:AddKeybind(opts)
@@ -2193,7 +2118,7 @@ end
 task.wait()
 
 -- ==========================================
--- 👥 PASO 4 DE CARGA: PESTAÑA 3 (JUGADORES, HITBOX, MUTE Y AMIGOS)
+-- 👥 PASO 4 DE CARGA: PESTAÑA 3 (JUGADORES, MUTE Y AMIGOS)
 -- ==========================================
 do
     local SubTabBar = Instance.new("Frame")
@@ -2267,45 +2192,6 @@ do
     MuteAllBtn.Parent = TabPlayers.Page
     Instance.new("UICorner", MuteAllBtn).CornerRadius = UDim.new(0, 6)
     local muteAllStroke = UI.applyNeonStroke(MuteAllBtn, THEME.Accent, 0.5, 1)
-
-    -- 📦 HITBOX EXPANDER AJUSTABLE
-    local hitboxToggleObj = TabPlayers:AddToggle({
-        Key = "HitboxExpander",
-        Icon = "📦",
-        Title = "Hitbox Expander",
-        Default = false,
-        Callback = Funcs.toggleHitboxExpander
-    })
-
-    Controls.hitboxSizeSlider = TabPlayers:AddSlider({
-        Title = "Tamaño Hitbox",
-        Min = 2,
-        Max = 25,
-        Default = Config.HitboxSize or 8,
-        Suffix = " st",
-        OnChange = function(v)
-            Config.HitboxSize = v
-            Funcs.refreshAllHitboxes()
-        end,
-        OnRelease = function()
-            saveStore()
-        end
-    })
-
-    Controls.hitboxTransSlider = TabPlayers:AddSlider({
-        Title = "Transparencia Hitbox",
-        Min = 0.20,
-        Max = 0.95,
-        Decimals = 2,
-        Default = Config.HitboxTransparency or 0.70,
-        OnChange = function(v)
-            Config.HitboxTransparency = v
-            Funcs.refreshAllHitboxes()
-        end,
-        OnRelease = function()
-            saveStore()
-        end
-    })
 
     local RefreshFriendsBtn = Instance.new("TextButton")
     Stealth.RandomizeName(RefreshFriendsBtn)
@@ -2461,9 +2347,6 @@ do
 
         SpectateBar.Visible = isServer
         MuteAllBtn.Visible = isServer
-        hitboxToggleObj.Card.Visible = isServer
-        Controls.hitboxSizeSlider.Card.Visible = isServer
-        Controls.hitboxTransSlider.Card.Visible = isServer
         PlayerListContainer.Visible = isServer
         RefreshFriendsBtn.Visible = not isServer
         FriendsListContainer.Visible = not isServer
@@ -3073,7 +2956,6 @@ do
         for k, v in pairs(State) do Funcs.syncQuickBtnVisual(k, v) end
         if Funcs.updateSpectateVisuals then Funcs.updateSpectateVisuals() end
         if Funcs.updateMuteVisuals then Funcs.updateMuteVisuals() end
-        if State.HitboxExpander then Funcs.refreshAllHitboxes() end
         saveStore()
     end
 
@@ -3137,8 +3019,6 @@ do
         Controls.glassSlider.Set(Config.GlassTransparency)
         Controls.flySlider.Set(Config.FlySpeed)
         Controls.freeCamSlider.Set(Config.FreeCamSpeed)
-        Controls.hitboxSizeSlider.Set(Config.HitboxSize or 8)
-        Controls.hitboxTransSlider.Set(Config.HitboxTransparency or 0.70)
         Controls.antiAfkToggle.Set(Config.AntiAFK ~= false, true)
         Controls.fpsBoosterToggle.Set(Config.FPSBooster == true, false)
         Controls.lockButtonsToggle.Set(Config.LockButtons == true, true)
@@ -3147,7 +3027,6 @@ do
         Controls.espHealthToggle.Set(Config.ESPHealth ~= false, true)
         Controls.espDistToggle.Set(Config.ESPDistance ~= false, true)
         Funcs.refreshESPBillboards()
-        Funcs.refreshAllHitboxes()
         Controls.applyAllPositionsFromConfig()
         for _, refreshFn in ipairs(Controls.keybindRefreshers) do refreshFn() end
     end
@@ -3511,7 +3390,7 @@ do
     end))
 
     HubMaid:GiveTask(Services.Players.PlayerAdded:Connect(function(plr)
-        Funcs.setupPlayerTracker(plr)
+        Funcs.setupPlayerESP(plr)
         Funcs.createPlayerRow(plr)
         Funcs.rebuildXRayFilter()
     end))
