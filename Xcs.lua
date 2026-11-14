@@ -18,6 +18,55 @@ local Mouse = LocalPlayer:GetMouse()
 local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 -- ==========================================
+-- 🛡️ MÓDULO DE SIGILO (STEALTH)
+-- ==========================================
+local Stealth = {}
+local _stealthSeed = tick() % 1000
+local realDisconnects = setmetatable({}, { __mode = "k" })
+
+local function stealthName()
+    _stealthSeed = _stealthSeed + 1
+    local prefixes = {"Frame", "TextLabel", "ImageLabel", "UICorner", "UIStroke", "ScrollingFrame", "TextButton", "ImageButton", "ViewportFrame"}
+    return prefixes[math.random(1, #prefixes)] .. "_" .. string.format("%04x", math.random(0, 0xFFFF))
+end
+
+function Stealth.HideConnections(connection)
+    if not connection then return connection end
+    pcall(function()
+        realDisconnects[connection] = connection.Disconnect
+        if setmetatable then
+            local oldmt = getmetatable(connection)
+            if oldmt then
+                setmetatable(connection, {
+                    __index = function(_, k)
+                        if k == "Disconnect" then return function() end end
+                        return oldmt.__index[k]
+                    end
+                })
+            end
+        end
+    end)
+    return connection
+end
+
+function Stealth.Disconnect(connection)
+    if not connection then return end
+    local fn = realDisconnects[connection]
+    if fn then
+        pcall(fn, connection)
+        realDisconnects[connection] = nil
+    else
+        pcall(function() connection:Disconnect() end)
+    end
+end
+
+function Stealth.RandomizeName(instance)
+    if instance and typeof(instance) == "Instance" then
+        pcall(function() instance.Name = stealthName() end)
+    end
+end
+
+-- ==========================================
 -- 🧹 GESTOR DE LIMPIEZA CENTRALIZADO (MAID)
 -- ==========================================
 local Maid = {}
@@ -39,7 +88,7 @@ function Maid:DoCleaning()
         self._tasks[i] = nil
         local t = typeof(taskObj)
         if t == "RBXScriptConnection" then
-            pcall(function() taskObj:Disconnect() end)
+            Stealth.Disconnect(taskObj)
         elseif t == "Instance" then
             pcall(function() taskObj:Destroy() end)
         elseif t == "function" then
@@ -51,42 +100,6 @@ function Maid:DoCleaning()
 end
 
 local HubMaid = Maid.new()
-
--- ==========================================
--- 🛡️ MÓDULO DE SIGILO (STEALTH)
--- ==========================================
-local Stealth = {}
-local _stealthSeed = tick() % 1000
-
-local function stealthName()
-    _stealthSeed = _stealthSeed + 1
-    local prefixes = {"Frame", "TextLabel", "ImageLabel", "UICorner", "UIStroke", "ScrollingFrame", "TextButton", "ImageButton", "ViewportFrame"}
-    return prefixes[math.random(1, #prefixes)] .. "_" .. string.format("%04x", math.random(0, 0xFFFF))
-end
-
-function Stealth.HideConnections(connection)
-    if not connection then return connection end
-    pcall(function()
-        if setmetatable then
-            local oldmt = getmetatable(connection)
-            if oldmt then
-                setmetatable(connection, {
-                    __index = function(_, k)
-                        if k == "Disconnect" then return function() end end
-                        return oldmt.__index[k]
-                    end
-                })
-            end
-        end
-    end)
-    return connection
-end
-
-function Stealth.RandomizeName(instance)
-    if instance and typeof(instance) == "Instance" then
-        pcall(function() instance.Name = stealthName() end)
-    end
-end
 
 -- ==========================================
 -- 🎨 TEMAS NEON GLASS DINÁMICOS
@@ -315,6 +328,7 @@ end
 -- Conexiones y cachés de rendimiento
 local noclipConnection = nil
 local cachedCharParts = {}
+local originalPartCollide = setmetatable({}, { __mode = "k" })
 local flyConnection, flyAttachment, flyLinearVel, flyAlignOri = nil, nil, nil, nil
 local fpXRayConnection, invisicamConnection, thirdPersonConnection = nil, nil, nil
 local transparentParts = {}
@@ -403,7 +417,7 @@ local function toggleInvisicam(state)
             LocalPlayer.CameraMaxZoomDistance = 400
             LocalPlayer.CameraMinZoomDistance = 0.5
         end)
-        if invisicamConnection then invisicamConnection:Disconnect() end
+        Stealth.Disconnect(invisicamConnection)
         invisicamConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
             if not State.Invisicam then return end
             pcall(function()
@@ -417,7 +431,8 @@ local function toggleInvisicam(state)
             LocalPlayer.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom
             LocalPlayer.CameraMaxZoomDistance = 15
         end)
-        if invisicamConnection then invisicamConnection:Disconnect(); invisicamConnection = nil end
+        Stealth.Disconnect(invisicamConnection)
+        invisicamConnection = nil
     end
 end
 
@@ -430,7 +445,7 @@ local function toggleThirdPerson(state)
             LocalPlayer.DevComputerCameraMode = Enum.DevComputerCameraMode.Classic
             LocalPlayer.DevTouchCameraMode = Enum.DevTouchCameraMode.Classic
         end)
-        if thirdPersonConnection then thirdPersonConnection:Disconnect() end
+        Stealth.Disconnect(thirdPersonConnection)
         thirdPersonConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
             if not State.ThirdPerson then return end
             pcall(function()
@@ -440,7 +455,8 @@ local function toggleThirdPerson(state)
             end)
         end))
     else
-        if thirdPersonConnection then thirdPersonConnection:Disconnect(); thirdPersonConnection = nil end
+        Stealth.Disconnect(thirdPersonConnection)
+        thirdPersonConnection = nil
     end
 end
 
@@ -494,11 +510,17 @@ local function cacheCharacterParts(char)
     for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
             table.insert(cachedCharParts, part)
+            if originalPartCollide[part] == nil then
+                originalPartCollide[part] = part.CanCollide
+            end
         end
     end
     char.DescendantAdded:Connect(function(desc)
         if desc:IsA("BasePart") and not desc:FindFirstAncestorOfClass("Accessory") then
             table.insert(cachedCharParts, desc)
+            if originalPartCollide[desc] == nil then
+                originalPartCollide[desc] = desc.CanCollide
+            end
         end
     end)
 end
@@ -508,24 +530,43 @@ if LocalPlayer.Character then cacheCharacterParts(LocalPlayer.Character) end
 local function toggleNoclip(state)
     State.Noclip = state
     syncQuickBtnVisual("Noclip", state)
+
     if state then
-        if noclipConnection then noclipConnection:Disconnect() end
+        Stealth.Disconnect(noclipConnection)
+        noclipConnection = nil
+
         if #cachedCharParts == 0 and LocalPlayer.Character then
             cacheCharacterParts(LocalPlayer.Character)
         end
+
         noclipConnection = Stealth.HideConnections(RunService.Stepped:Connect(function()
+            if not State.Noclip then return end
             for i = 1, #cachedCharParts do
                 local part = cachedCharParts[i]
                 if part and part.Parent and part.CanCollide then
+                    if originalPartCollide[part] == nil then
+                        originalPartCollide[part] = true
+                    end
                     part.CanCollide = false
                 end
             end
         end))
     else
-        if noclipConnection then noclipConnection:Disconnect(); noclipConnection = nil end
+        Stealth.Disconnect(noclipConnection)
+        noclipConnection = nil
+
+        for i = 1, #cachedCharParts do
+            local part = cachedCharParts[i]
+            if part and part.Parent and originalPartCollide[part] ~= nil then
+                part.CanCollide = originalPartCollide[part]
+            end
+        end
+
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp then hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0) end
+        if hrp then
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0)
+        end
     end
 end
 
@@ -563,9 +604,9 @@ local function toggleFPXRay(state)
     syncQuickBtnVisual("FPXRay", state)
     if state then
         rebuildXRayFilter()
-        if fpXRayConnection then fpXRayConnection:Disconnect() end
+        Stealth.Disconnect(fpXRayConnection)
         fpXRayConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function()
-            if not LocalPlayer.Character then return end
+            if not State.FPXRay or not LocalPlayer.Character then return end
             clearXRayParts()
 
             local rayOrigin = Camera.CFrame.Position
@@ -591,7 +632,8 @@ local function toggleFPXRay(state)
             end
         end))
     else
-        if fpXRayConnection then fpXRayConnection:Disconnect(); fpXRayConnection = nil end
+        Stealth.Disconnect(fpXRayConnection)
+        fpXRayConnection = nil
         clearXRayParts()
     end
 end
@@ -635,7 +677,8 @@ end
 local toggleFreeCam
 
 local function cleanupFlyPhysics()
-    if flyConnection then flyConnection:Disconnect(); flyConnection = nil end
+    Stealth.Disconnect(flyConnection)
+    flyConnection = nil
     if flyLinearVel then flyLinearVel:Destroy(); flyLinearVel = nil end
     if flyAlignOri then flyAlignOri:Destroy(); flyAlignOri = nil end
     if flyAttachment then flyAttachment:Destroy(); flyAttachment = nil end
@@ -720,7 +763,7 @@ toggleFreeCam = function(state)
         camPitch = math.asin(look.Y)
         camPos = Camera.CFrame.Position
 
-        if freeCamConnection then freeCamConnection:Disconnect() end
+        Stealth.Disconnect(freeCamConnection)
         freeCamConnection = Stealth.HideConnections(RunService.RenderStepped:Connect(function(dt)
             if not State.FreeCam then return end
             local rot = CFrame.fromEulerAnglesYXZ(camPitch, camYaw, 0)
@@ -759,7 +802,8 @@ toggleFreeCam = function(state)
             end
         end)
     else
-        if freeCamConnection then freeCamConnection:Disconnect(); freeCamConnection = nil end
+        Stealth.Disconnect(freeCamConnection)
+        freeCamConnection = nil
         if freeCamRotateConnection then freeCamRotateConnection:Disconnect(); freeCamRotateConnection = nil end
         Camera.CameraType = Enum.CameraType.Custom
         local char = LocalPlayer.Character
@@ -1351,9 +1395,9 @@ local function makeSpecNavBtn(text, pos, size)
     return b, st
 end
 
-local PrevSpecBtn, prevSpecStroke   = makeSpecNavBtn("◀", UDim2.new(0, 0, 0, 0),    UDim2.new(0, 28, 1, 0))
-local SelfSpecBtn, selfSpecStroke   = makeSpecNavBtn("🏠 Mi Cámara", UDim2.new(0, 32, 0, 0), UDim2.new(1, -64, 1, 0))
-local NextSpecBtn, nextSpecStroke   = makeSpecNavBtn("▶", UDim2.new(1, -28, 0, 0),  UDim2.new(0, 28, 1, 0))
+local PrevSpecBtn, prevSpecStroke = makeSpecNavBtn("◀", UDim2.new(0, 0, 0, 0),      UDim2.new(0, 28, 1, 0))
+local SelfSpecBtn, selfSpecStroke = makeSpecNavBtn("🏠 Mi Cámara", UDim2.new(0, 32, 0, 0), UDim2.new(1, -64, 1, 0))
+local NextSpecBtn, nextSpecStroke = makeSpecNavBtn("▶", UDim2.new(1, -28, 0, 0),    UDim2.new(0, 28, 1, 0))
 
 registerThemeCallback(function(t)
     searchBox.BackgroundColor3 = t.BgCard
