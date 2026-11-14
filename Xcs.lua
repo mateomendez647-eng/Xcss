@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.6 - Ultra Stealth & Modular)
--- Blindaje Total de Instancias + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends
+-- HUB: xcs (Neon Glass v3.6.1 - Ultra Stealth & Modular / TP & Delete Fixed)
+-- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Fix Raycast
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -57,7 +57,6 @@ function Stealth.RandomizeName(instance)
     end
 end
 
--- Crea la instancia y asigna nombre aleatorio ANTES de asignarle Parent (evita ChildAdded triggers)
 function Stealth.New(className, parent)
     local inst = Instance.new(className)
     pcall(function() inst.Name = Stealth.Name() end)
@@ -459,7 +458,6 @@ local function unloadHub()
     for _, conn in pairs(Modules.muteCharConns) do Stealth.Disconnect(conn) end
     HubMaid:DoCleaning()
 
-    -- Limpieza estricta de tablas para el Garbage Collector
     table.clear(Modules.espCharConns)
     table.clear(Modules.muteCharConns)
     table.clear(Modules.espEntries)
@@ -795,7 +793,6 @@ do
         Modules.xrayRayParams.FilterDescendantsInstances = Modules.xrayFilterList
     end
 
-    -- 🚀 Teleport Anti-Rubberband sincronizado con Heartbeat
     function Funcs.SafeTeleport(targetCFrame)
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -840,9 +837,6 @@ do
         end
     end
 
-    -- ==========================================
-    -- 🎯 DETECCIÓN DE RIGS Y EQUIPOS (MULTI-JUEGO)
-    -- ==========================================
     local DEFAULT_NEUTRAL_COLOR = BrickColor.new("Medium stone grey")
 
     function Funcs.getPlayerRig(plr)
@@ -898,7 +892,6 @@ do
         end
     end
 
-    -- Hitbox Expander con Massless y restauración limpia
     function Funcs.applyHitboxToPlayer(plr)
         if not State.HitboxExpander or plr == LocalPlayer then return end
         if Funcs.isPlayerTeammate(plr) then return end
@@ -963,7 +956,6 @@ do
         end
     end
 
-    -- Interactuar sin espera
     local function makePromptInstant(prompt)
         if not prompt or not prompt:IsA("ProximityPrompt") then return end
         if Modules.originalPromptDurations[prompt] == nil then
@@ -1009,7 +1001,6 @@ do
         end
     end
 
-    -- Invisicam
     function Funcs.toggleInvisicam(state)
         State.Invisicam = state
         Funcs.syncQuickBtnVisual("Invisicam", state)
@@ -1038,7 +1029,6 @@ do
         end
     end
 
-    -- Third Person
     function Funcs.toggleThirdPerson(state)
         State.ThirdPerson = state
         Funcs.syncQuickBtnVisual("ThirdPerson", state)
@@ -1063,9 +1053,6 @@ do
         end
     end
 
-    -- ==========================================
-    -- 🎯 ESP UNIVERSAL (CONTENEDOR PROTEGIDO + CACHÉ DE NPCs)
-    -- ==========================================
     local ENEMY_FILL    = Color3.fromRGB(255, 0, 80)
     local ENEMY_OUTLINE = Color3.fromRGB(255, 255, 255)
     local TEAM_FILL     = Color3.fromRGB(0, 220, 120)
@@ -1142,7 +1129,6 @@ do
         local fillCol = (modeTag == "Team") and TEAM_FILL or ((modeTag == "NPC") and NPC_FILL or ENEMY_FILL)
         local outCol  = (modeTag == "Team") and TEAM_OUTLINE or ((modeTag == "NPC") and NPC_OUTLINE or ENEMY_OUTLINE)
 
-        -- 1) Highlight 3D (parentado en UI.ScreenGui protegida)
         local hl = Stealth.New("Highlight", UI.ScreenGui)
         hl.Adornee = rig
         hl.FillColor = fillCol
@@ -1151,7 +1137,6 @@ do
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 
-        -- 2) Marcador 2D en el cuerpo
         local bodyGui = Stealth.New("BillboardGui", UI.ScreenGui)
         bodyGui.Adornee = torsoPart
         bodyGui.AlwaysOnTop = true
@@ -1173,7 +1158,6 @@ do
         boxStroke.Thickness = 1.2
         boxStroke.Transparency = 0.1
 
-        -- 3) Etiqueta flotante (Nombre • Vida • Distancia)
         local infoGui = Stealth.New("BillboardGui", UI.ScreenGui)
         infoGui.Adornee = headPart
         infoGui.AlwaysOnTop = true
@@ -1229,7 +1213,6 @@ do
         }
     end
 
-    -- Caché eficiente de NPCs mediante eventos en lugar de GetDescendants() continuo
     local function ensureNPCCache()
         if Modules.npcScanInitialized then return end
         Modules.npcScanInitialized = true
@@ -1285,7 +1268,6 @@ do
 
         local activeKeys = {}
 
-        -- 1) Jugadores reales
         for _, plr in ipairs(Services.Players:GetPlayers()) do
             if plr ~= LocalPlayer then
                 local rig = Funcs.getPlayerRig(plr)
@@ -1333,7 +1315,6 @@ do
             end
         end
 
-        -- 2) NPCs / Bots opcionales (desde caché)
         for _, npcModel in ipairs(getCachedNPCModels()) do
             activeKeys[npcModel] = true
             local entry = Modules.espEntries[npcModel]
@@ -1425,7 +1406,6 @@ do
         end
     end)
 
-    -- Noclip
     function Funcs.cacheCharacterParts(char)
         table.clear(Modules.cachedCharParts)
         if not char then return end
@@ -1588,7 +1568,6 @@ do
         end
     end
 
-    -- Fly & FreeCam (instancias creadas con Stealth.New antes de parentar al HRP)
     local function getMoveDirection()
         local c = LocalPlayer.Character
         local hum = c and c:FindFirstChildOfClass("Humanoid")
@@ -1757,7 +1736,7 @@ do
 
     local header = Stealth.New("TextButton", mainFrame)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.6"
+    header.Text = "   ◈ xcs Hub  v3.6.1"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -2294,7 +2273,6 @@ do
         OnRelease = function() saveStore() end
     })
 
-    -- 📍 WAYPOINTS POR JUEGO (JSON POR PLACEID)
     TabMove:AddSection("Waypoints del Juego")
 
     local WAYPOINTS_FILE = "xcs_waypoints.json"
@@ -2463,7 +2441,6 @@ do
         renderWaypointsList()
     end)
 
-    -- Visuales y ESP con Menú Desplegable (<) y Recuadro
     TabVisuals:AddSection("Cámara y Visión")
     local espGroup = TabVisuals:AddCollapsibleToggle({
         Key = "ESP", Icon = "🎯", Title = "ESP Jugadores", Callback = Funcs.toggleESP
@@ -2599,7 +2576,6 @@ do
     Stealth.New("UICorner", MuteAllBtn).CornerRadius = UDim.new(0, 6)
     local muteAllStroke = UI.applyNeonStroke(MuteAllBtn, THEME.Accent, 0.5, 1)
 
-    -- 📦 HITBOX EXPANDER AJUSTABLE
     local hitboxToggleObj = TabPlayers:AddToggle({
         Key = "HitboxExpander",
         Icon = "📦",
@@ -3558,7 +3534,7 @@ end
 task.wait()
 
 -- ==========================================
--- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES
+-- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES (CORREGIDO Y OPTIMIZADO)
 -- ==========================================
 do
     local function makeDraggable(dragHandle, targetFrame, saveKey, respectLock)
@@ -3717,7 +3693,7 @@ do
         UI.MiniBtn.Visible = false
     end)
 
-    -- Raycast e Inputs
+    -- 🎯 Raycast e Inputs Corregidos (ViewportPointToRay + GetMouseLocation)
     local function raycastIgnoringDeleted(origin, direction)
         local filter = {LocalPlayer.Character, Camera}
         for _, p in ipairs(Services.Players:GetPlayers()) do
@@ -3733,7 +3709,7 @@ do
     end
 
     local function DeletePartAt(screenPos)
-        local ray = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+        local ray = Camera:ViewportPointToRay(screenPos.X, screenPos.Y)
         local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
         local part = result and result.Instance
         if part and part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
@@ -3744,7 +3720,7 @@ do
     end
 
     local function TeleportAt(screenPos)
-        local ray = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+        local ray = Camera:ViewportPointToRay(screenPos.X, screenPos.Y)
         local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
         if result then
             Funcs.SafeTeleport(CFrame.new(result.Position + Vector3.new(0, 3.5, 0)))
@@ -3776,21 +3752,28 @@ do
             if isKeyMatch(codeName, kb.ESP)        then Funcs.setFeatureState("ESP",        not State.ESP) end
             if isKeyMatch(codeName, kb.InfJump)    then Funcs.setFeatureState("InfJump",    not State.InfJump) end
             if isKeyMatch(codeName, kb.Restore)    then Funcs.RestoreMap() end
-            if isKeyMatch(codeName, kb.Teleport)   then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
-            if isKeyMatch(codeName, kb.Delete)     then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
+            if isKeyMatch(codeName, kb.Teleport)   then TeleportAt(Services.UserInputService:GetMouseLocation()) end
+            if isKeyMatch(codeName, kb.Delete)     then DeletePartAt(Services.UserInputService:GetMouseLocation()) end
         end
     end))
 
     local function isOverGui(pos)
         if not UI.ScreenGui or not UI.ScreenGui.Parent then return false end
-        local parentGui = UI.ScreenGui.Parent
-        if parentGui and parentGui.GetGuiObjectsAtPosition then
-            for _, obj in ipairs(parentGui:GetGuiObjectsAtPosition(pos.X, pos.Y)) do
-                if obj:IsDescendantOf(UI.ScreenGui) then return true end
-            end
+        local function isPointInside(guiObj)
+            if not guiObj or not guiObj.Visible then return false end
+            local absPos = guiObj.AbsolutePosition
+            local absSize = guiObj.AbsoluteSize
+            return pos.X >= absPos.X and pos.X <= (absPos.X + absSize.X)
+               and pos.Y >= absPos.Y and pos.Y <= (absPos.Y + absSize.Y)
         end
-        for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)) do
-            if obj:IsDescendantOf(UI.ScreenGui) then return true end
+
+        if isPointInside(UI.MainFrame) or isPointInside(UI.MiniBtn) then
+            return true
+        end
+        for _, qBtn in pairs(QuickButtons) do
+            if isPointInside(qBtn) then
+                return true
+            end
         end
         return false
     end
@@ -3810,7 +3793,7 @@ do
         if gp or Runtime.hubUnloaded then return end
         if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
             touchState.totalMoved += input.Delta.Magnitude
-            if touchState.totalMoved > 10 then touchState.isCameraDrag = true end
+            if touchState.totalMoved > 12 then touchState.isCameraDrag = true end
         end
     end))
 
@@ -3818,9 +3801,12 @@ do
         if gp or Runtime.hubUnloaded then return end
         if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
             touchState.active = false
-            if (os.clock() - touchState.startTime) < 0.3 and not touchState.isCameraDrag and not isOverGui(input.Position) then
-                if State.DeleteMode then DeletePartAt(input.Position)
-                elseif State.TPS then TeleportAt(input.Position) end
+            if (os.clock() - touchState.startTime) < 0.35 and not touchState.isCameraDrag and not isOverGui(input.Position) then
+                if State.DeleteMode then
+                    DeletePartAt(input.Position)
+                elseif State.TPS then
+                    TeleportAt(input.Position)
+                end
             end
         end
     end))
@@ -3856,9 +3842,6 @@ do
     end))
 end
 
--- ==========================================
--- ✅ FINALIZACIÓN SEGURA DE ARRANQUE
--- ==========================================
 if Config.FPSBooster then
     Funcs.toggleFPSBooster(true)
 end
