@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.1 - Safe Boot & Modular)
--- Carga Escalonada + Anti-Límite 200 Locals + ESP Info + Mute + Join Friends + Server Hop
+-- HUB: xcs (Neon Glass v3.2 - Safe Boot & Modular)
+-- Waypoints por PlaceId (JSON) + Lock Buttons + ESP Info + Mute + Join Friends + Server Hop
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -181,6 +181,7 @@ local function buildDefaultProfile()
         FreeCamSpeed = 50,
         AntiAFK = true,
         FPSBooster = false,
+        LockButtons = false,
         ESPInfo = true,
         ESPName = true,
         ESPHealth = true,
@@ -353,6 +354,7 @@ local Modules = {
     savedGfxLighting = {},
     fpsDescendantConn = nil,
     visitedStore = {},
+    waypointsStore = {},
     originalPromptDurations = setmetatable({}, { __mode = "k" }),
     instantPromptShownConn = nil,
     instantPromptAddedConn = nil,
@@ -1391,7 +1393,7 @@ do
     local header = Instance.new("TextButton")
     Stealth.RandomizeName(header)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.1"
+    header.Text = "   ◈ xcs Hub  v3.2"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -1863,7 +1865,7 @@ end
 task.wait()
 
 -- ==========================================
--- 📑 PASO 3 DE CARGA: PESTAÑAS 1 Y 2 (MOV. Y VIS.)
+-- 📑 PASO 3 DE CARGA: PESTAÑAS 1 Y 2 (MOV., WAYPOINTS Y VIS.)
 -- ==========================================
 local TabMove    = UI.CreateTab("Mov.", "🕊️")
 local TabVisuals = UI.CreateTab("Vis.", "👁️")
@@ -1886,6 +1888,195 @@ do
         OnRelease = function() saveStore() end
     })
 
+    -- 📍 WAYPOINTS POR JUEGO (JSON POR PLACEID)
+    TabMove:AddSection("Waypoints del Juego")
+
+    local WAYPOINTS_FILE = "xcs_waypoints.json"
+    local placeKey = tostring(game.PlaceId)
+
+    local function loadWaypoints()
+        pcall(function()
+            if isfile and readfile and isfile(WAYPOINTS_FILE) then
+                local decoded = Services.HttpService:JSONDecode(readfile(WAYPOINTS_FILE))
+                if type(decoded) == "table" then
+                    Modules.waypointsStore = decoded
+                end
+            end
+        end)
+        if type(Modules.waypointsStore[placeKey]) ~= "table" then
+            Modules.waypointsStore[placeKey] = {}
+        end
+    end
+
+    local function saveWaypoints()
+        pcall(function()
+            if writefile then
+                writefile(WAYPOINTS_FILE, Services.HttpService:JSONEncode(Modules.waypointsStore))
+            end
+        end)
+    end
+
+    loadWaypoints()
+
+    local wpInputBar = Instance.new("Frame")
+    Stealth.RandomizeName(wpInputBar)
+    wpInputBar.Size = UDim2.new(1, 0, 0, 26)
+    wpInputBar.BackgroundTransparency = 1
+    wpInputBar.Parent = TabMove.Page
+
+    local wpNameBox = Instance.new("TextBox")
+    Stealth.RandomizeName(wpNameBox)
+    wpNameBox.Size = UDim2.new(1, -68, 1, 0)
+    wpNameBox.BackgroundTransparency = 0.15
+    wpNameBox.Text = ""
+    wpNameBox.PlaceholderText = "Nombre (ej. Tienda)..."
+    wpNameBox.Font = Enum.Font.Gotham
+    wpNameBox.TextSize = 9
+    wpNameBox.ClearTextOnFocus = false
+    wpNameBox.Parent = wpInputBar
+    Instance.new("UICorner", wpNameBox).CornerRadius = UDim.new(0, 6)
+    local wpBoxStroke = UI.applyNeonStroke(wpNameBox, THEME.Accent, 0.65, 1)
+
+    local wpSaveBtn = Instance.new("TextButton")
+    Stealth.RandomizeName(wpSaveBtn)
+    wpSaveBtn.Size = UDim2.new(0, 64, 1, 0)
+    wpSaveBtn.Position = UDim2.new(1, -64, 0, 0)
+    wpSaveBtn.Text = "💾 Guardar"
+    wpSaveBtn.Font = Enum.Font.GothamBold
+    wpSaveBtn.TextSize = 8
+    wpSaveBtn.Parent = wpInputBar
+    Instance.new("UICorner", wpSaveBtn).CornerRadius = UDim.new(0, 6)
+    local wpSaveStroke = UI.applyNeonStroke(wpSaveBtn, THEME.AccentGreen, 0.35, 1)
+
+    local WaypointsListContainer = Instance.new("Frame")
+    Stealth.RandomizeName(WaypointsListContainer)
+    WaypointsListContainer.Size = UDim2.new(1, 0, 0, 0)
+    WaypointsListContainer.AutomaticSize = Enum.AutomaticSize.Y
+    WaypointsListContainer.BackgroundTransparency = 1
+    WaypointsListContainer.Parent = TabMove.Page
+
+    local WaypointsListLayout = Instance.new("UIListLayout")
+    WaypointsListLayout.Padding = UDim.new(0, 4)
+    WaypointsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    WaypointsListLayout.Parent = WaypointsListContainer
+
+    local function renderWaypointsList()
+        for _, child in ipairs(WaypointsListContainer:GetChildren()) do
+            if child:IsA("GuiObject") then child:Destroy() end
+        end
+
+        local list = Modules.waypointsStore[placeKey] or {}
+        if #list == 0 then
+            local emptyLbl = Instance.new("TextLabel")
+            Stealth.RandomizeName(emptyLbl)
+            emptyLbl.Size = UDim2.new(1, 0, 0, 20)
+            emptyLbl.BackgroundTransparency = 1
+            emptyLbl.Text = "Sin waypoints guardados en este mapa."
+            emptyLbl.TextColor3 = THEME.TextMuted
+            emptyLbl.Font = Enum.Font.Gotham
+            emptyLbl.TextSize = 8
+            emptyLbl.Parent = WaypointsListContainer
+            return
+        end
+
+        for idx, wp in ipairs(list) do
+            local row = Instance.new("Frame")
+            Stealth.RandomizeName(row)
+            row.Size = UDim2.new(1, 0, 0, 26)
+            row.BackgroundColor3 = THEME.BgCard
+            row.BackgroundTransparency = 0.25
+            row.LayoutOrder = idx
+            row.Parent = WaypointsListContainer
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+            UI.applyNeonStroke(row, THEME.Accent, 0.78, 1)
+
+            local titleLbl = Instance.new("TextLabel")
+            Stealth.RandomizeName(titleLbl)
+            titleLbl.Size = UDim2.new(1, -66, 1, 0)
+            titleLbl.Position = UDim2.new(0, 8, 0, 0)
+            titleLbl.BackgroundTransparency = 1
+            titleLbl.Text = string.format("📍 %s (%d, %d, %d)", tostring(wp.name), math.floor(wp.x), math.floor(wp.y), math.floor(wp.z))
+            titleLbl.TextColor3 = THEME.TextMain
+            titleLbl.Font = Enum.Font.GothamMedium
+            titleLbl.TextSize = 9
+            titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+            titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+            titleLbl.Parent = row
+
+            local tpBtn = Instance.new("TextButton")
+            Stealth.RandomizeName(tpBtn)
+            tpBtn.Size = UDim2.new(0, 30, 0, 18)
+            tpBtn.Position = UDim2.new(1, -56, 0.5, -9)
+            tpBtn.BackgroundColor3 = THEME.Accent
+            tpBtn.Text = "TP"
+            tpBtn.TextColor3 = THEME.BgMain
+            tpBtn.Font = Enum.Font.GothamBold
+            tpBtn.TextSize = 8
+            tpBtn.Parent = row
+            Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+            tpBtn.MouseButton1Click:Connect(function()
+                local cf = CFrame.new(wp.x, wp.y, wp.z)
+                if wp.rx and wp.ry and wp.rz then
+                    cf = cf * CFrame.fromEulerAnglesYXZ(wp.rx, wp.ry, wp.rz)
+                end
+                Funcs.SafeTeleport(cf)
+            end)
+
+            local delBtn = Instance.new("TextButton")
+            Stealth.RandomizeName(delBtn)
+            delBtn.Size = UDim2.new(0, 20, 0, 18)
+            delBtn.Position = UDim2.new(1, -23, 0.5, -9)
+            delBtn.BackgroundColor3 = THEME.BgHeader
+            delBtn.Text = "✕"
+            delBtn.TextColor3 = THEME.AccentRed
+            delBtn.Font = Enum.Font.GothamBold
+            delBtn.TextSize = 8
+            delBtn.Parent = row
+            Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
+            UI.applyNeonStroke(delBtn, THEME.AccentRed, 0.55, 1)
+            delBtn.MouseButton1Click:Connect(function()
+                table.remove(Modules.waypointsStore[placeKey], idx)
+                saveWaypoints()
+                renderWaypointsList()
+            end)
+        end
+    end
+
+    wpSaveBtn.MouseButton1Click:Connect(function()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        local list = Modules.waypointsStore[placeKey]
+        local rawName = string.match(wpNameBox.Text or "", "^%s*(.-)%s*$")
+        local wpName = (rawName ~= "") and rawName or ("Punto #" .. (#list + 1))
+
+        local cf = hrp.CFrame
+        local rx, ry, rz = cf:ToEulerAnglesYXZ()
+        table.insert(list, {
+            name = wpName,
+            x = math.floor(cf.X * 10 + 0.5) / 10,
+            y = math.floor(cf.Y * 10 + 0.5) / 10,
+            z = math.floor(cf.Z * 10 + 0.5) / 10,
+            rx = rx, ry = ry, rz = rz
+        })
+        wpNameBox.Text = ""
+        saveWaypoints()
+        renderWaypointsList()
+    end)
+
+    registerThemeCallback(function(t)
+        wpNameBox.BackgroundColor3 = t.BgCard
+        wpNameBox.PlaceholderColor3 = t.TextMuted
+        wpNameBox.TextColor3 = t.TextMain
+        wpBoxStroke.Color = t.Accent
+        wpSaveBtn.BackgroundColor3 = t.BgCardOn
+        wpSaveBtn.TextColor3 = t.AccentGreen
+        wpSaveStroke.Color = t.AccentGreen
+        renderWaypointsList()
+    end)
+
+    -- Visuales
     TabVisuals:AddSection("Cámara y Visión")
     TabVisuals:AddToggle({ Key = "ESP", Icon = "🎯", Title = "ESP Jugadores", Callback = Funcs.toggleESP })
 
@@ -2039,7 +2230,6 @@ do
     FriendsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     FriendsListLayout.Parent = FriendsListContainer
 
-    -- Sistema de silencio
     local function applyAudioMuteState(plr, isMuted)
         if not plr or plr == LocalPlayer then return end
         for _, inst in ipairs(plr:GetDescendants()) do
@@ -2831,6 +3021,7 @@ do
         Controls.freeCamSlider.Set(Config.FreeCamSpeed)
         Controls.antiAfkToggle.Set(Config.AntiAFK ~= false, true)
         Controls.fpsBoosterToggle.Set(Config.FPSBooster == true, false)
+        Controls.lockButtonsToggle.Set(Config.LockButtons == true, true)
         Controls.espInfoToggle.Set(Config.ESPInfo ~= false, true)
         Controls.espNameToggle.Set(Config.ESPName ~= false, true)
         Controls.espHealthToggle.Set(Config.ESPHealth ~= false, true)
@@ -2860,6 +3051,17 @@ do
     })
 
     TabConfig:AddSection("Botones Flotantes Rápidos")
+
+    Controls.lockButtonsToggle = TabConfig:AddToggle({
+        Icon = "🔒",
+        Title = "Bloquear Posición de Botones",
+        Default = Config.LockButtons == true,
+        Callback = function(val)
+            Config.LockButtons = val
+            saveStore()
+        end
+    })
+
     local quickSpecs = {
         {Key = "TPS",             Label = "Botón TPS (Toque)",     TouchOnly = true},
         {Key = "Invisicam",       Label = "Botón Invisicam (INV)"},
@@ -2927,10 +3129,11 @@ task.wait()
 -- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES
 -- ==========================================
 do
-    local function makeDraggable(dragHandle, targetFrame, saveKey)
+    local function makeDraggable(dragHandle, targetFrame, saveKey, respectLock)
         local dragging, dragInput, dragStart, startPos
         dragHandle.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if respectLock and Config.LockButtons then return end
                 dragging = true
                 dragStart = input.Position
                 startPos = targetFrame.Position
@@ -2949,6 +3152,10 @@ do
         end)
         HubMaid:GiveTask(Services.UserInputService.InputChanged:Connect(function(input)
             if input == dragInput and dragging then
+                if respectLock and Config.LockButtons then
+                    dragging = false
+                    return
+                end
                 local delta = input.Position - dragStart
                 local vp = Camera.ViewportSize
                 local newX = math.clamp(startPos.X.Offset + delta.X, 0, math.max(0, vp.X - targetFrame.AbsoluteSize.X))
@@ -2958,8 +3165,8 @@ do
         end))
     end
 
-    makeDraggable(UI.Header, UI.MainFrame, "MainFrame")
-    makeDraggable(UI.MiniBtn, UI.MiniBtn, "MiniBtn")
+    makeDraggable(UI.Header, UI.MainFrame, "MainFrame", false)
+    makeDraggable(UI.MiniBtn, UI.MiniBtn, "MiniBtn", true)
 
     local function createQuickBtn(name, shortText, onClick, isActionBtn)
         local btn = Instance.new("TextButton")
@@ -2999,6 +3206,7 @@ do
         end)
         btn.InputChanged:Connect(function(input)
             if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and dragStartScreen then
+                if Config.LockButtons then return end
                 if (input.Position - dragStartScreen).Magnitude > 6 then
                     isDragging = true
                     local delta = input.Position - dragStartScreen
@@ -3013,7 +3221,7 @@ do
             if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
                 if startPos and not isDragging then
                     onClick(btn, stroke)
-                elseif isDragging then
+                elseif isDragging and not Config.LockButtons then
                     local snap = 35
                     for otherName, otherBtn in pairs(QuickButtons) do
                         if otherName ~= name and otherBtn.Visible then
