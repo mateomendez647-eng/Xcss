@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.2 - Safe Boot & Modular)
--- Waypoints por PlaceId (JSON) + Lock Buttons + ESP Info + Mute + Join Friends + Server Hop
+-- HUB: xcs (Neon Glass v3.4 - Safe Boot & Modular)
+-- ESP Enemigos/Compañeros + Hitbox Expander + Waypoints + Mute + Join Friends + Server Hop
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -179,9 +179,13 @@ local function buildDefaultProfile()
         UiScale = 1.0,
         FlySpeed = 50,
         FreeCamSpeed = 50,
+        HitboxSize = 8,
+        HitboxTransparency = 0.70,
         AntiAFK = true,
         FPSBooster = false,
         LockButtons = false,
+        ESPEnemies = true,
+        ESPTeammates = false,
         ESPInfo = true,
         ESPName = true,
         ESPHealth = true,
@@ -298,6 +302,7 @@ local State = {
     TPS = false, Invisicam = false, FPXRay = false, ESP = false,
     DeleteMode = false, Noclip = false, InfJump = false, Fly = false,
     FreeCam = false, Fullbright = false, ThirdPerson = false, InstantInteract = false,
+    HitboxExpander = false,
 }
 
 local Runtime = {
@@ -361,6 +366,7 @@ local Modules = {
     mutedPlayers = {},
     originalSoundVolumes = setmetatable({}, { __mode = "k" }),
     muteCharConns = {},
+    originalHitboxProps = setmetatable({}, { __mode = "k" }),
     playerCards = {},
     friendCards = {},
 }
@@ -387,6 +393,7 @@ local function unloadHub()
     if State.Fullbright and Funcs.toggleFullbright then Funcs.toggleFullbright(false) end
     if State.ThirdPerson and Funcs.toggleThirdPerson then Funcs.toggleThirdPerson(false) end
     if State.InstantInteract and Funcs.toggleInstantInteract then Funcs.toggleInstantInteract(false) end
+    if State.HitboxExpander and Funcs.toggleHitboxExpander then Funcs.toggleHitboxExpander(false) end
 
     if Config.FPSBooster and Funcs.toggleFPSBooster then
         Funcs.toggleFPSBooster(false)
@@ -723,7 +730,7 @@ do
 end
 
 -- ==========================================
--- 🎮 MÓDULO DE FUNCIONES CORE (MOVIMIENTO Y VISUALES)
+-- 🎮 MÓDULO DE FUNCIONES CORE (MOVIMIENTO, VISUALES, ESP Y HITBOX)
 -- ==========================================
 do
     function Funcs.rebuildXRayFilter()
@@ -780,6 +787,94 @@ do
             ToggleUpdaters[key](enabled, skipCallback)
         else
             Funcs.syncQuickBtnVisual(key, enabled)
+        end
+    end
+
+    -- Detección de Equipo (Enemigo vs Compañero)
+    function Funcs.isPlayerTeammate(plr)
+        if not plr or plr == LocalPlayer then return false end
+        if LocalPlayer.Team ~= nil and plr.Team ~= nil then
+            return plr.Team == LocalPlayer.Team
+        end
+        if not LocalPlayer.Neutral and not plr.Neutral and LocalPlayer.TeamColor and plr.TeamColor then
+            return plr.TeamColor == LocalPlayer.TeamColor
+        end
+        local myAttr = LocalPlayer:GetAttribute("Team") or (LocalPlayer.Character and LocalPlayer.Character:GetAttribute("Team"))
+        local theirAttr = plr:GetAttribute("Team") or (plr.Character and plr.Character:GetAttribute("Team"))
+        if myAttr ~= nil and theirAttr ~= nil then
+            return myAttr == theirAttr
+        end
+        return false
+    end
+
+    function Funcs.shouldTrackPlayerESP(plr)
+        if not State.ESP or not plr or plr == LocalPlayer then return false end
+        if Funcs.isPlayerTeammate(plr) then
+            return Config.ESPTeammates == true
+        else
+            return Config.ESPEnemies ~= false
+        end
+    end
+
+    -- Hitbox Expander (ignora compañeros si hay equipos)
+    function Funcs.applyHitboxToPlayer(plr)
+        if not State.HitboxExpander or plr == LocalPlayer then return end
+        if Funcs.isPlayerTeammate(plr) then return end
+        local char = plr.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp or not hrp:IsA("BasePart") then return end
+
+        if not Modules.originalHitboxProps[hrp] then
+            Modules.originalHitboxProps[hrp] = {
+                Size = hrp.Size,
+                Transparency = hrp.Transparency,
+                Material = hrp.Material,
+                Color = hrp.Color,
+                CanCollide = hrp.CanCollide,
+            }
+        end
+
+        local s = Config.HitboxSize or 8
+        local targetSize = Vector3.new(s, s, s)
+        local targetTrans = Config.HitboxTransparency or 0.70
+
+        if hrp.Size ~= targetSize then hrp.Size = targetSize end
+        if math.abs(hrp.Transparency - targetTrans) > 0.005 then hrp.Transparency = targetTrans end
+        if hrp.Material ~= Enum.Material.Neon then hrp.Material = Enum.Material.Neon end
+        if hrp.Color ~= THEME.Accent then hrp.Color = THEME.Accent end
+        if hrp.CanCollide then hrp.CanCollide = false end
+    end
+
+    function Funcs.refreshAllHitboxes()
+        if not State.HitboxExpander then return end
+        for _, plr in ipairs(Services.Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                Funcs.applyHitboxToPlayer(plr)
+            end
+        end
+    end
+
+    function Funcs.restoreAllHitboxes()
+        for hrp, orig in pairs(Modules.originalHitboxProps) do
+            if hrp and hrp.Parent then
+                pcall(function()
+                    hrp.Size = orig.Size
+                    hrp.Transparency = orig.Transparency
+                    hrp.Material = orig.Material
+                    hrp.Color = orig.Color
+                    hrp.CanCollide = orig.CanCollide
+                end)
+            end
+        end
+        Modules.originalHitboxProps = setmetatable({}, { __mode = "k" })
+    end
+
+    function Funcs.toggleHitboxExpander(state)
+        State.HitboxExpander = state
+        if state then
+            Funcs.refreshAllHitboxes()
+        else
+            Funcs.restoreAllHitboxes()
         end
     end
 
@@ -865,7 +960,7 @@ do
         if state then
             pcall(function()
                 LocalPlayer.CameraMode = Enum.CameraMode.Classic
-                LocalPlayer.DevComputerCameraMode = Enum.DevComputerCameraMode.Classic
+                LocalPlayer.DevComputerCameraMode = Enum.CameraMode.Classic
                 LocalPlayer.DevTouchCameraMode = Enum.DevTouchCameraMode.Classic
             end)
             Stealth.Disconnect(Modules.thirdPersonConn)
@@ -883,7 +978,14 @@ do
         end
     end
 
-    -- ESP + Etiqueta Flotante (Nombre, Vida, Distancia)
+    -- ==========================================
+    -- 🎯 ESP MEJORADO (ENEMIGOS / COMPAÑEROS + ANTI-STREAMING)
+    -- ==========================================
+    local ENEMY_FILL    = Color3.fromRGB(255, 0, 80)
+    local ENEMY_OUTLINE = Color3.fromRGB(255, 255, 255)
+    local TEAM_FILL     = Color3.fromRGB(0, 220, 120)
+    local TEAM_OUTLINE  = Color3.fromRGB(210, 255, 235)
+
     local function shouldShowESPBillboard()
         return State.ESP
             and (Config.ESPInfo ~= false)
@@ -898,11 +1000,12 @@ do
         else return "#EB4155" end
     end
 
-    local function buildESPString(plr, hum, dist)
+    local function buildESPString(plr, hum, dist, isMate)
         local parts = {}
         if Config.ESPName ~= false then
             local safeName = string.gsub(plr.DisplayName, "[<>&]", "")
-            table.insert(parts, string.format('<font color="#F0F5FF">%s</font>', safeName))
+            local nameColor = isMate and "#64F5B4" or "#F0F5FF"
+            table.insert(parts, string.format('<font color="%s">%s</font>', nameColor, safeName))
         end
         if Config.ESPHealth ~= false then
             local hp = hum and math.max(0, math.floor(hum.Health + 0.5)) or 0
@@ -915,120 +1018,203 @@ do
         return table.concat(parts, ' <font color="#5A6982">•</font> ')
     end
 
+    function Funcs.removePlayerESP(plr)
+        if Modules.espHighlights[plr] then
+            if Modules.espHighlights[plr].Parent then
+                Modules.espHighlights[plr]:Destroy()
+            end
+            Modules.espHighlights[plr] = nil
+        end
+        if Modules.espBillboards[plr] then
+            if Modules.espBillboards[plr].Gui and Modules.espBillboards[plr].Gui.Parent then
+                Modules.espBillboards[plr].Gui:Destroy()
+            end
+            Modules.espBillboards[plr] = nil
+        end
+    end
+
+    local function getCharacterAdornee(char)
+        if not char then return nil end
+        return char:FindFirstChild("Head")
+            or char:FindFirstChild("HumanoidRootPart")
+            or char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("Torso")
+            or char.PrimaryPart
+            or char:FindFirstChildWhichIsA("BasePart")
+    end
+
+    function Funcs.applyESPToCharacter(plr, char)
+        if not Funcs.shouldTrackPlayerESP(plr) or not char or not char.Parent then
+            Funcs.removePlayerESP(plr)
+            return
+        end
+
+        Funcs.removePlayerESP(plr)
+
+        local isMate = Funcs.isPlayerTeammate(plr)
+        local fillCol = isMate and TEAM_FILL or ENEMY_FILL
+        local outCol  = isMate and TEAM_OUTLINE or ENEMY_OUTLINE
+
+        local hl = Instance.new("Highlight")
+        Stealth.RandomizeName(hl)
+        hl.Adornee = char
+        hl.FillColor = fillCol
+        hl.OutlineColor = outCol
+        hl.FillTransparency = isMate and 0.65 or 0.5
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = UI.ScreenGui
+        Modules.espHighlights[plr] = hl
+
+        local adornee = getCharacterAdornee(char)
+        if not adornee then return end
+
+        local bb = Instance.new("BillboardGui")
+        Stealth.RandomizeName(bb)
+        bb.Adornee = adornee
+        bb.AlwaysOnTop = true
+        bb.Size = UDim2.new(0, 220, 0, 22)
+        bb.StudsOffset = (adornee.Name == "Head") and Vector3.new(0, 2.1, 0) or Vector3.new(0, 3.3, 0)
+        bb.MaxDistance = 3000
+        bb.Enabled = shouldShowESPBillboard()
+        bb.Parent = UI.ScreenGui
+
+        local pill = Instance.new("Frame")
+        Stealth.RandomizeName(pill)
+        pill.AnchorPoint = Vector2.new(0.5, 0.5)
+        pill.Position = UDim2.new(0.5, 0, 0.5, 0)
+        pill.Size = UDim2.new(0, 0, 0, 18)
+        pill.AutomaticSize = Enum.AutomaticSize.X
+        pill.BackgroundColor3 = Color3.fromRGB(13, 17, 26)
+        pill.BackgroundTransparency = 0.35
+        pill.BorderSizePixel = 0
+        pill.Parent = bb
+        Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+
+        local pillStroke = Instance.new("UIStroke")
+        Stealth.RandomizeName(pillStroke)
+        pillStroke.Color = fillCol
+        pillStroke.Transparency = 0.45
+        pillStroke.Thickness = 1
+        pillStroke.Parent = pill
+
+        local pad = Instance.new("UIPadding")
+        pad.PaddingLeft = UDim.new(0, 7)
+        pad.PaddingRight = UDim.new(0, 7)
+        pad.Parent = pill
+
+        local lbl = Instance.new("TextLabel")
+        Stealth.RandomizeName(lbl)
+        lbl.Size = UDim2.new(0, 0, 1, 0)
+        lbl.AutomaticSize = Enum.AutomaticSize.X
+        lbl.BackgroundTransparency = 1
+        lbl.RichText = true
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 10
+        lbl.TextColor3 = Color3.fromRGB(240, 245, 255)
+        lbl.TextStrokeTransparency = 0.65
+        lbl.Parent = pill
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local tHrp = char:FindFirstChild("HumanoidRootPart") or adornee
+        local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
+        lbl.Text = buildESPString(plr, hum, dist, isMate)
+
+        Modules.espBillboards[plr] = { Gui = bb, Label = lbl, Stroke = pillStroke }
+    end
+
     function Funcs.refreshESPBillboards()
+        if not State.ESP then return end
         local show = shouldShowESPBillboard()
         local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-        for plr, data in pairs(Modules.espBillboards) do
-            if data.Gui and data.Gui.Parent then
-                data.Gui.Enabled = show
-                if show then
-                    local char = plr.Character
-                    local hum = char and char:FindFirstChildOfClass("Humanoid")
-                    local tHrp = char and char:FindFirstChild("HumanoidRootPart")
-                    local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
-                    data.Label.Text = buildESPString(plr, hum, dist)
+        for _, plr in ipairs(Services.Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local char = plr.Character
+                local shouldTrack = Funcs.shouldTrackPlayerESP(plr) and char and char.Parent ~= nil
+
+                if not shouldTrack then
+                    if Modules.espHighlights[plr] or Modules.espBillboards[plr] then
+                        Funcs.removePlayerESP(plr)
+                    end
+                else
+                    local hl = Modules.espHighlights[plr]
+                    local bbData = Modules.espBillboards[plr]
+                    local currentAdornee = getCharacterAdornee(char)
+
+                    -- Si falta Highlight, se perdió Adornee o cargó tarde por Streaming, re-aplicar
+                    if not hl or not hl.Parent or hl.Adornee ~= char
+                        or (currentAdornee and (not bbData or not bbData.Gui or not bbData.Gui.Parent or not bbData.Gui.Adornee)) then
+                        Funcs.applyESPToCharacter(plr, char)
+                        hl = Modules.espHighlights[plr]
+                        bbData = Modules.espBillboards[plr]
+                    end
+
+                    local isMate = Funcs.isPlayerTeammate(plr)
+                    local fillCol = isMate and TEAM_FILL or ENEMY_FILL
+                    local outCol  = isMate and TEAM_OUTLINE or ENEMY_OUTLINE
+
+                    if hl and hl.Parent then
+                        if hl.FillColor ~= fillCol then
+                            hl.FillColor = fillCol
+                            hl.OutlineColor = outCol
+                            hl.FillTransparency = isMate and 0.65 or 0.5
+                        end
+                    end
+
+                    if bbData and bbData.Gui and bbData.Gui.Parent then
+                        bbData.Gui.Enabled = show
+                        if bbData.Stroke and bbData.Stroke.Color ~= fillCol then
+                            bbData.Stroke.Color = fillCol
+                        end
+                        if show then
+                            local hum = char:FindFirstChildOfClass("Humanoid")
+                            local tHrp = char:FindFirstChild("HumanoidRootPart") or currentAdornee
+                            local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
+                            bbData.Label.Text = buildESPString(plr, hum, dist, isMate)
+                        end
+                    end
                 end
             end
         end
     end
 
-    function Funcs.applyESPToCharacter(plr, char)
-        if not State.ESP or plr == LocalPlayer or not char then return end
-
-        if Modules.espHighlights[plr] and Modules.espHighlights[plr].Parent then
-            Modules.espHighlights[plr]:Destroy()
+    function Funcs.refreshESPAll()
+        if not State.ESP then
+            for _, plr in ipairs(Services.Players:GetPlayers()) do
+                Funcs.removePlayerESP(plr)
+            end
+            return
         end
-        if Modules.espBillboards[plr] and Modules.espBillboards[plr].Gui and Modules.espBillboards[plr].Gui.Parent then
-            Modules.espBillboards[plr].Gui:Destroy()
+        for _, plr in ipairs(Services.Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                if Funcs.shouldTrackPlayerESP(plr) and plr.Character then
+                    Funcs.applyESPToCharacter(plr, plr.Character)
+                else
+                    Funcs.removePlayerESP(plr)
+                end
+            end
         end
-        Modules.espBillboards[plr] = nil
-
-        local hl = Instance.new("Highlight")
-        Stealth.RandomizeName(hl)
-        hl.FillColor = Color3.fromRGB(255, 0, 80)
-        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-        hl.FillTransparency = 0.5
-        hl.OutlineTransparency = 0
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Parent = char
-        Modules.espHighlights[plr] = hl
-
-        task.spawn(function()
-            local adornee = char:FindFirstChild("Head")
-                or char:FindFirstChild("HumanoidRootPart")
-                or char:WaitForChild("Head", 2)
-                or char:FindFirstChild("HumanoidRootPart")
-
-            if not adornee or not char.Parent or not State.ESP then return end
-
-            local bb = Instance.new("BillboardGui")
-            Stealth.RandomizeName(bb)
-            bb.Adornee = adornee
-            bb.AlwaysOnTop = true
-            bb.Size = UDim2.new(0, 220, 0, 22)
-            bb.StudsOffset = (adornee.Name == "Head") and Vector3.new(0, 2.1, 0) or Vector3.new(0, 3.3, 0)
-            bb.MaxDistance = 2500
-            bb.Enabled = shouldShowESPBillboard()
-            bb.Parent = char
-
-            local pill = Instance.new("Frame")
-            Stealth.RandomizeName(pill)
-            pill.AnchorPoint = Vector2.new(0.5, 0.5)
-            pill.Position = UDim2.new(0.5, 0, 0.5, 0)
-            pill.Size = UDim2.new(0, 0, 0, 18)
-            pill.AutomaticSize = Enum.AutomaticSize.X
-            pill.BackgroundColor3 = Color3.fromRGB(13, 17, 26)
-            pill.BackgroundTransparency = 0.35
-            pill.BorderSizePixel = 0
-            pill.Parent = bb
-            Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
-
-            local pillStroke = Instance.new("UIStroke")
-            Stealth.RandomizeName(pillStroke)
-            pillStroke.Color = Color3.fromRGB(255, 0, 80)
-            pillStroke.Transparency = 0.45
-            pillStroke.Thickness = 1
-            pillStroke.Parent = pill
-
-            local pad = Instance.new("UIPadding")
-            pad.PaddingLeft = UDim.new(0, 7)
-            pad.PaddingRight = UDim.new(0, 7)
-            pad.Parent = pill
-
-            local lbl = Instance.new("TextLabel")
-            Stealth.RandomizeName(lbl)
-            lbl.Size = UDim2.new(0, 0, 1, 0)
-            lbl.AutomaticSize = Enum.AutomaticSize.X
-            lbl.BackgroundTransparency = 1
-            lbl.RichText = true
-            lbl.Font = Enum.Font.GothamBold
-            lbl.TextSize = 10
-            lbl.TextColor3 = Color3.fromRGB(240, 245, 255)
-            lbl.TextStrokeTransparency = 0.65
-            lbl.Parent = pill
-
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local tHrp = char:FindFirstChild("HumanoidRootPart")
-            local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
-            lbl.Text = buildESPString(plr, hum, dist)
-
-            Modules.espBillboards[plr] = { Gui = bb, Label = lbl, Stroke = pillStroke }
-        end)
     end
 
-    function Funcs.setupPlayerESP(plr)
+    function Funcs.setupPlayerTracker(plr)
         if plr == LocalPlayer then return end
         if Modules.espCharConns[plr] then Stealth.Disconnect(Modules.espCharConns[plr]) end
         Modules.espCharConns[plr] = plr.CharacterAdded:Connect(function(char)
             Funcs.rebuildXRayFilter()
-            task.wait(0.2)
+            task.wait(0.15)
             if State.ESP then Funcs.applyESPToCharacter(plr, char) end
+            if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
         end)
-        if State.ESP and plr.Character then
-            Funcs.applyESPToCharacter(plr, plr.Character)
+        if plr.Character then
+            if State.ESP then Funcs.applyESPToCharacter(plr, plr.Character) end
+            if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
         end
+    end
+
+    for _, plr in ipairs(Services.Players:GetPlayers()) do
+        Funcs.setupPlayerTracker(plr)
     end
 
     function Funcs.toggleESP(state)
@@ -1036,16 +1222,14 @@ do
         Funcs.syncQuickBtnVisual("ESP", state)
         if state then
             for _, plr in ipairs(Services.Players:GetPlayers()) do
-                Funcs.setupPlayerESP(plr)
+                Funcs.setupPlayerTracker(plr)
             end
+            Funcs.refreshESPAll()
         else
-            for _, hl in pairs(Modules.espHighlights) do
-                if hl and hl.Parent then hl:Destroy() end
+            for _, plr in ipairs(Services.Players:GetPlayers()) do
+                Funcs.removePlayerESP(plr)
             end
             table.clear(Modules.espHighlights)
-            for _, data in pairs(Modules.espBillboards) do
-                if data.Gui and data.Gui.Parent then data.Gui:Destroy() end
-            end
             table.clear(Modules.espBillboards)
         end
     end
@@ -1055,7 +1239,10 @@ do
             if State.ESP then
                 Funcs.refreshESPBillboards()
             end
-            task.wait(0.15)
+            if State.HitboxExpander then
+                Funcs.refreshAllHitboxes()
+            end
+            task.wait(0.18)
         end
     end)
 
@@ -1393,7 +1580,7 @@ do
     local header = Instance.new("TextButton")
     Stealth.RandomizeName(header)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.2"
+    header.Text = "   ◈ xcs Hub  v3.4"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -1730,7 +1917,7 @@ do
                 end
             end))
 
-            return { Set = function(v) setSliderValue(v, false) end }
+            return { Set = function(v) setSliderValue(v, false) end, Card = card }
         end
 
         function TabObj:AddKeybind(opts)
@@ -2076,10 +2263,18 @@ do
         renderWaypointsList()
     end)
 
-    -- Visuales
+    -- Visuales y ESP
     TabVisuals:AddSection("Cámara y Visión")
     TabVisuals:AddToggle({ Key = "ESP", Icon = "🎯", Title = "ESP Jugadores", Callback = Funcs.toggleESP })
 
+    Controls.espEnemiesToggle = TabVisuals:AddToggle({
+        Icon = "⚔️", Title = "ESP: Marcar Enemigos", Default = Config.ESPEnemies ~= false,
+        Callback = function(v) Config.ESPEnemies = v; saveStore(); Funcs.refreshESPAll() end
+    })
+    Controls.espTeammatesToggle = TabVisuals:AddToggle({
+        Icon = "🛡️", Title = "ESP: Marcar Compañeros", Default = Config.ESPTeammates == true,
+        Callback = function(v) Config.ESPTeammates = v; saveStore(); Funcs.refreshESPAll() end
+    })
     Controls.espInfoToggle = TabVisuals:AddToggle({
         Icon = "🏷️", Title = "ESP: Etiqueta Flotante", Default = Config.ESPInfo ~= false,
         Callback = function(v) Config.ESPInfo = v; saveStore(); Funcs.refreshESPBillboards() end
@@ -2118,7 +2313,7 @@ end
 task.wait()
 
 -- ==========================================
--- 👥 PASO 4 DE CARGA: PESTAÑA 3 (JUGADORES, MUTE Y AMIGOS)
+-- 👥 PASO 4 DE CARGA: PESTAÑA 3 (JUGADORES, HITBOX, MUTE Y AMIGOS)
 -- ==========================================
 do
     local SubTabBar = Instance.new("Frame")
@@ -2192,6 +2387,45 @@ do
     MuteAllBtn.Parent = TabPlayers.Page
     Instance.new("UICorner", MuteAllBtn).CornerRadius = UDim.new(0, 6)
     local muteAllStroke = UI.applyNeonStroke(MuteAllBtn, THEME.Accent, 0.5, 1)
+
+    -- 📦 HITBOX EXPANDER AJUSTABLE
+    local hitboxToggleObj = TabPlayers:AddToggle({
+        Key = "HitboxExpander",
+        Icon = "📦",
+        Title = "Hitbox Expander",
+        Default = false,
+        Callback = Funcs.toggleHitboxExpander
+    })
+
+    Controls.hitboxSizeSlider = TabPlayers:AddSlider({
+        Title = "Tamaño Hitbox",
+        Min = 2,
+        Max = 25,
+        Default = Config.HitboxSize or 8,
+        Suffix = " st",
+        OnChange = function(v)
+            Config.HitboxSize = v
+            Funcs.refreshAllHitboxes()
+        end,
+        OnRelease = function()
+            saveStore()
+        end
+    })
+
+    Controls.hitboxTransSlider = TabPlayers:AddSlider({
+        Title = "Transparencia Hitbox",
+        Min = 0.20,
+        Max = 0.95,
+        Decimals = 2,
+        Default = Config.HitboxTransparency or 0.70,
+        OnChange = function(v)
+            Config.HitboxTransparency = v
+            Funcs.refreshAllHitboxes()
+        end,
+        OnRelease = function()
+            saveStore()
+        end
+    })
 
     local RefreshFriendsBtn = Instance.new("TextButton")
     Stealth.RandomizeName(RefreshFriendsBtn)
@@ -2347,6 +2581,9 @@ do
 
         SpectateBar.Visible = isServer
         MuteAllBtn.Visible = isServer
+        hitboxToggleObj.Card.Visible = isServer
+        Controls.hitboxSizeSlider.Card.Visible = isServer
+        Controls.hitboxTransSlider.Card.Visible = isServer
         PlayerListContainer.Visible = isServer
         RefreshFriendsBtn.Visible = not isServer
         FriendsListContainer.Visible = not isServer
@@ -2956,6 +3193,7 @@ do
         for k, v in pairs(State) do Funcs.syncQuickBtnVisual(k, v) end
         if Funcs.updateSpectateVisuals then Funcs.updateSpectateVisuals() end
         if Funcs.updateMuteVisuals then Funcs.updateMuteVisuals() end
+        if State.HitboxExpander then Funcs.refreshAllHitboxes() end
         saveStore()
     end
 
@@ -3019,14 +3257,19 @@ do
         Controls.glassSlider.Set(Config.GlassTransparency)
         Controls.flySlider.Set(Config.FlySpeed)
         Controls.freeCamSlider.Set(Config.FreeCamSpeed)
+        Controls.hitboxSizeSlider.Set(Config.HitboxSize or 8)
+        Controls.hitboxTransSlider.Set(Config.HitboxTransparency or 0.70)
         Controls.antiAfkToggle.Set(Config.AntiAFK ~= false, true)
         Controls.fpsBoosterToggle.Set(Config.FPSBooster == true, false)
         Controls.lockButtonsToggle.Set(Config.LockButtons == true, true)
+        Controls.espEnemiesToggle.Set(Config.ESPEnemies ~= false, true)
+        Controls.espTeammatesToggle.Set(Config.ESPTeammates == true, true)
         Controls.espInfoToggle.Set(Config.ESPInfo ~= false, true)
         Controls.espNameToggle.Set(Config.ESPName ~= false, true)
         Controls.espHealthToggle.Set(Config.ESPHealth ~= false, true)
         Controls.espDistToggle.Set(Config.ESPDistance ~= false, true)
-        Funcs.refreshESPBillboards()
+        Funcs.refreshESPAll()
+        Funcs.refreshAllHitboxes()
         Controls.applyAllPositionsFromConfig()
         for _, refreshFn in ipairs(Controls.keybindRefreshers) do refreshFn() end
     end
@@ -3390,7 +3633,7 @@ do
     end))
 
     HubMaid:GiveTask(Services.Players.PlayerAdded:Connect(function(plr)
-        Funcs.setupPlayerESP(plr)
+        Funcs.setupPlayerTracker(plr)
         Funcs.createPlayerRow(plr)
         Funcs.rebuildXRayFilter()
     end))
@@ -3399,11 +3642,7 @@ do
         if Runtime.spectatingPlayer == plr then Funcs.resetSpectate() end
         if Modules.espCharConns[plr] then Stealth.Disconnect(Modules.espCharConns[plr]); Modules.espCharConns[plr] = nil end
         if Modules.muteCharConns[plr] then Stealth.Disconnect(Modules.muteCharConns[plr]); Modules.muteCharConns[plr] = nil end
-        if Modules.espHighlights[plr] then Modules.espHighlights[plr]:Destroy(); Modules.espHighlights[plr] = nil end
-        if Modules.espBillboards[plr] then
-            if Modules.espBillboards[plr].Gui then Modules.espBillboards[plr].Gui:Destroy() end
-            Modules.espBillboards[plr] = nil
-        end
+        Funcs.removePlayerESP(plr)
         if Modules.playerCards[plr] then
             Modules.playerCards[plr].Row:Destroy()
             Modules.playerCards[plr] = nil
