@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + Server Hop
+-- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + Server Hop + ESP Info
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -194,6 +194,10 @@ local function buildDefaultProfile()
         FreeCamSpeed = 50,
         AntiAFK = true,
         FPSBooster = false,
+        ESPInfo = true,
+        ESPName = true,
+        ESPHealth = true,
+        ESPDistance = true,
         Keybinds = {
             Invisicam  = "V",
             Noclip     = "X",
@@ -345,6 +349,7 @@ local fpXRayConnection, invisicamConnection, thirdPersonConnection = nil, nil, n
 local transparentParts = {}
 local deletedPartsMemory = {}
 local espHighlights = {}
+local espBillboards = {}
 local espCharConnections = {}
 local freeCamConnection, freeCamRotateConnection = nil, nil
 local camYaw, camPitch = 0, 0
@@ -777,11 +782,71 @@ local function toggleThirdPerson(state)
     end
 end
 
-local function applyHighlightToCharacter(plr, char)
+-- 🎯 ESP: Resaltado Rojo + Etiqueta Flotante Minimalista (Nombre, HP y Distancia)
+local function shouldShowESPBillboard()
+    return State.ESP
+        and (Config.ESPInfo ~= false)
+        and (Config.ESPName ~= false or Config.ESPHealth ~= false or Config.ESPDistance ~= false)
+end
+
+local function getHealthHex(hum)
+    if not hum or hum.MaxHealth <= 0 then return "#00DC78" end
+    local pct = hum.Health / hum.MaxHealth
+    if pct > 0.6 then
+        return "#00DC78"
+    elseif pct > 0.3 then
+        return "#F0961E"
+    else
+        return "#EB4155"
+    end
+end
+
+local function buildESPString(plr, hum, dist)
+    local parts = {}
+    if Config.ESPName ~= false then
+        local safeName = string.gsub(plr.DisplayName, "[<>&]", "")
+        table.insert(parts, string.format('<font color="#F0F5FF">%s</font>', safeName))
+    end
+    if Config.ESPHealth ~= false then
+        local hp = hum and math.max(0, math.floor(hum.Health + 0.5)) or 0
+        table.insert(parts, string.format('<font color="%s">%d HP</font>', getHealthHex(hum), hp))
+    end
+    if Config.ESPDistance ~= false then
+        local dText = dist and (dist .. "m") or "--m"
+        table.insert(parts, string.format('<font color="#91A0B9">%s</font>', dText))
+    end
+    return table.concat(parts, ' <font color="#5A6982">•</font> ')
+end
+
+local function refreshESPBillboards()
+    local show = shouldShowESPBillboard()
+    local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+    for plr, data in pairs(espBillboards) do
+        if data.Gui and data.Gui.Parent then
+            data.Gui.Enabled = show
+            if show then
+                local char = plr.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local tHrp = char and char:FindFirstChild("HumanoidRootPart")
+                local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
+                data.Label.Text = buildESPString(plr, hum, dist)
+            end
+        end
+    end
+end
+
+local function applyESPToCharacter(plr, char)
     if not State.ESP or plr == LocalPlayer or not char then return end
+
     if espHighlights[plr] and espHighlights[plr].Parent then
         espHighlights[plr]:Destroy()
     end
+    if espBillboards[plr] and espBillboards[plr].Gui and espBillboards[plr].Gui.Parent then
+        espBillboards[plr].Gui:Destroy()
+    end
+    espBillboards[plr] = nil
+
     local hl = Instance.new("Highlight")
     Stealth.RandomizeName(hl)
     hl.FillColor = Color3.fromRGB(255, 0, 80)
@@ -791,6 +856,74 @@ local function applyHighlightToCharacter(plr, char)
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     hl.Parent = char
     espHighlights[plr] = hl
+
+    task.spawn(function()
+        local adornee = char:FindFirstChild("Head")
+            or char:FindFirstChild("HumanoidRootPart")
+            or char:WaitForChild("Head", 2)
+            or char:FindFirstChild("HumanoidRootPart")
+
+        if not adornee or not char.Parent or not State.ESP then return end
+
+        local bb = Instance.new("BillboardGui")
+        Stealth.RandomizeName(bb)
+        bb.Name = stealthName()
+        bb.Adornee = adornee
+        bb.AlwaysOnTop = true
+        bb.Size = UDim2.new(0, 220, 0, 22)
+        bb.StudsOffset = (adornee.Name == "Head") and Vector3.new(0, 2.1, 0) or Vector3.new(0, 3.3, 0)
+        bb.MaxDistance = 2500
+        bb.Enabled = shouldShowESPBillboard()
+        bb.Parent = char
+
+        local pill = Instance.new("Frame")
+        Stealth.RandomizeName(pill)
+        pill.AnchorPoint = Vector2.new(0.5, 0.5)
+        pill.Position = UDim2.new(0.5, 0, 0.5, 0)
+        pill.Size = UDim2.new(0, 0, 0, 18)
+        pill.AutomaticSize = Enum.AutomaticSize.X
+        pill.BackgroundColor3 = Color3.fromRGB(13, 17, 26)
+        pill.BackgroundTransparency = 0.35
+        pill.BorderSizePixel = 0
+        pill.Parent = bb
+        Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+
+        local pillStroke = Instance.new("UIStroke")
+        Stealth.RandomizeName(pillStroke)
+        pillStroke.Color = Color3.fromRGB(255, 0, 80)
+        pillStroke.Transparency = 0.45
+        pillStroke.Thickness = 1
+        pillStroke.Parent = pill
+
+        local pad = Instance.new("UIPadding")
+        pad.PaddingLeft = UDim.new(0, 7)
+        pad.PaddingRight = UDim.new(0, 7)
+        pad.Parent = pill
+
+        local lbl = Instance.new("TextLabel")
+        Stealth.RandomizeName(lbl)
+        lbl.Size = UDim2.new(0, 0, 1, 0)
+        lbl.AutomaticSize = Enum.AutomaticSize.X
+        lbl.BackgroundTransparency = 1
+        lbl.RichText = true
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 10
+        lbl.TextColor3 = Color3.fromRGB(240, 245, 255)
+        lbl.TextStrokeTransparency = 0.65
+        lbl.Parent = pill
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local tHrp = char:FindFirstChild("HumanoidRootPart")
+        local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
+        lbl.Text = buildESPString(plr, hum, dist)
+
+        espBillboards[plr] = {
+            Gui = bb,
+            Label = lbl,
+            Stroke = pillStroke
+        }
+    end)
 end
 
 local function setupPlayerESP(plr)
@@ -799,10 +932,10 @@ local function setupPlayerESP(plr)
     espCharConnections[plr] = plr.CharacterAdded:Connect(function(char)
         rebuildXRayFilter()
         task.wait(0.2)
-        if State.ESP then applyHighlightToCharacter(plr, char) end
+        if State.ESP then applyESPToCharacter(plr, char) end
     end)
     if State.ESP and plr.Character then
-        applyHighlightToCharacter(plr, plr.Character)
+        applyESPToCharacter(plr, plr.Character)
     end
 end
 
@@ -818,8 +951,22 @@ local function toggleESP(state)
             if hl and hl.Parent then hl:Destroy() end
         end
         table.clear(espHighlights)
+
+        for _, data in pairs(espBillboards) do
+            if data.Gui and data.Gui.Parent then data.Gui:Destroy() end
+        end
+        table.clear(espBillboards)
     end
 end
+
+task.spawn(function()
+    while not hubUnloaded do
+        if State.ESP then
+            refreshESPBillboards()
+        end
+        task.wait(0.15)
+    end
+end)
 
 local function cacheCharacterParts(char)
     table.clear(cachedCharParts)
@@ -1700,6 +1847,51 @@ local flySlider = TabMove:AddSlider({
 -- --- PESTAÑA 2: VISUALES, CÁMARA E INTERACCIÓN ---
 TabVisuals:AddSection("Cámara y Visión")
 TabVisuals:AddToggle({ Key = "ESP",         Icon = "🎯", Title = "ESP Jugadores",       Callback = toggleESP })
+
+local espInfoToggle = TabVisuals:AddToggle({
+    Icon = "🏷️",
+    Title = "ESP: Etiqueta Flotante",
+    Default = Config.ESPInfo ~= false,
+    Callback = function(v)
+        Config.ESPInfo = v
+        saveStore()
+        refreshESPBillboards()
+    end
+})
+
+local espNameToggle = TabVisuals:AddToggle({
+    Icon = "🪪",
+    Title = "ESP: Mostrar Nombre",
+    Default = Config.ESPName ~= false,
+    Callback = function(v)
+        Config.ESPName = v
+        saveStore()
+        refreshESPBillboards()
+    end
+})
+
+local espHealthToggle = TabVisuals:AddToggle({
+    Icon = "❤️",
+    Title = "ESP: Mostrar Vida (HP)",
+    Default = Config.ESPHealth ~= false,
+    Callback = function(v)
+        Config.ESPHealth = v
+        saveStore()
+        refreshESPBillboards()
+    end
+})
+
+local espDistToggle = TabVisuals:AddToggle({
+    Icon = "📏",
+    Title = "ESP: Mostrar Distancia (m)",
+    Default = Config.ESPDistance ~= false,
+    Callback = function(v)
+        Config.ESPDistance = v
+        saveStore()
+        refreshESPBillboards()
+    end
+})
+
 TabVisuals:AddToggle({ Key = "Invisicam",   Icon = "👁️", Title = "Invisicam + Zoom",    Callback = toggleInvisicam })
 TabVisuals:AddToggle({ Key = "FPXRay",      Icon = "🧱", Title = "FP X-Ray (Paredes)",  Callback = toggleFPXRay })
 TabVisuals:AddToggle({ Key = "Fullbright",  Icon = "☀️", Title = "Fullbright",          Callback = toggleFullbright })
@@ -1842,7 +2034,6 @@ local muteCharConns = {}
 local function applyAudioMuteState(plr, isMuted)
     if not plr or plr == LocalPlayer then return end
 
-    -- 1) Chat de voz moderno (AudioDeviceInput)
     for _, inst in ipairs(plr:GetDescendants()) do
         if inst:IsA("AudioDeviceInput") then
             pcall(function() inst.Muted = isMuted end)
@@ -1854,7 +2045,6 @@ local function applyAudioMuteState(plr, isMuted)
         end
     end
 
-    -- 2) Chat de voz interno (VoiceChatInternal)
     pcall(function()
         local vci = game:GetService("VoiceChatInternal")
         if vci and vci.SubscribePause then
@@ -1862,7 +2052,6 @@ local function applyAudioMuteState(plr, isMuted)
         end
     end)
 
-    -- 3) Sonidos de personaje / herramientas (boombox, audios locales)
     local function handleSound(snd)
         if snd:IsA("Sound") then
             if isMuted then
@@ -2681,6 +2870,11 @@ local function switchProfile(profileName)
     freeCamSlider.Set(Config.FreeCamSpeed)
     antiAfkToggle.Set(Config.AntiAFK ~= false, true)
     fpsBoosterToggle.Set(Config.FPSBooster == true, false)
+    espInfoToggle.Set(Config.ESPInfo ~= false, true)
+    espNameToggle.Set(Config.ESPName ~= false, true)
+    espHealthToggle.Set(Config.ESPHealth ~= false, true)
+    espDistToggle.Set(Config.ESPDistance ~= false, true)
+    refreshESPBillboards()
     applyAllPositionsFromConfig()
     for _, refreshFn in ipairs(keybindRefreshers) do refreshFn() end
 end
@@ -3070,6 +3264,10 @@ HubMaid:GiveTask(Players.PlayerRemoving:Connect(function(plr)
     if espCharConnections[plr] then espCharConnections[plr]:Disconnect(); espCharConnections[plr] = nil end
     if muteCharConns[plr] then muteCharConns[plr]:Disconnect(); muteCharConns[plr] = nil end
     if espHighlights[plr] then espHighlights[plr]:Destroy(); espHighlights[plr] = nil end
+    if espBillboards[plr] then
+        if espBillboards[plr].Gui then espBillboards[plr].Gui:Destroy() end
+        espBillboards[plr] = nil
+    end
     if playerCards[plr] then
         playerCards[plr].Row:Destroy()
         playerCards[plr] = nil
