@@ -1548,19 +1548,20 @@ local function CreateTab(name, icon)
 
         local label = Instance.new("TextLabel")
         Stealth.RandomizeName(label)
-        label.Size = UDim2.new(0.68, 0, 1, 0)
+        label.Size = UDim2.new(0.58, 0, 1, 0)
         label.Position = UDim2.new(0, 9, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = opts.Title
         label.Font = Enum.Font.Gotham
         label.TextSize = 9
+        label.TextTruncate = Enum.TextTruncate.AtEnd
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = card
 
         local box = Instance.new("TextButton")
         Stealth.RandomizeName(box)
-        box.Size = UDim2.new(0, 48, 0, 18)
-        box.Position = UDim2.new(1, -54, 0.5, -9)
+        box.Size = UDim2.new(0, 46, 0, 18)
+        box.Position = UDim2.new(1, -76, 0.5, -9)
         box.Text = Config.Keybinds[opts.KeyName] or "None"
         box.Font = Enum.Font.GothamBold
         box.TextSize = 8
@@ -1568,15 +1569,51 @@ local function CreateTab(name, icon)
         Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
         local boxStroke = applyNeonStroke(box, THEME.Accent, 0.5, 1)
 
+        local clearBtn = Instance.new("TextButton")
+        Stealth.RandomizeName(clearBtn)
+        clearBtn.Size = UDim2.new(0, 20, 0, 18)
+        clearBtn.Position = UDim2.new(1, -26, 0.5, -9)
+        clearBtn.Text = "✕"
+        clearBtn.Font = Enum.Font.GothamBold
+        clearBtn.TextSize = 8
+        clearBtn.Parent = card
+        Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(0, 5)
+        local clearStroke = applyNeonStroke(clearBtn, THEME.AccentRed, 0.55, 1)
+
+        local function refreshKeyVisual()
+            local val = Config.Keybinds[opts.KeyName] or "None"
+            box.Text = val
+            if listeningFor ~= opts.KeyName then
+                box.BackgroundColor3 = THEME.BgHeader
+                box.TextColor3 = (val == "None") and THEME.TextMuted or THEME.Accent
+                boxStroke.Color = THEME.Accent
+                boxStroke.Transparency = (val == "None") and 0.75 or 0.5
+            end
+        end
+
         registerThemeCallback(function(t)
             card.BackgroundColor3 = t.BgCard
             stroke.Color = t.Accent
             label.TextColor3 = t.TextMain
-            if listeningFor ~= opts.KeyName then
-                box.BackgroundColor3 = t.BgHeader
-                box.TextColor3 = t.Accent
-                boxStroke.Color = t.Accent
+            clearBtn.BackgroundColor3 = t.BgHeader
+            clearBtn.TextColor3 = t.AccentRed
+            clearStroke.Color = t.AccentRed
+            refreshKeyVisual()
+        end)
+
+        local activeConn = nil
+
+        clearBtn.MouseButton1Click:Connect(function()
+            if activeConn then
+                activeConn:Disconnect()
+                activeConn = nil
             end
+            if listeningFor == opts.KeyName then
+                listeningFor = nil
+            end
+            Config.Keybinds[opts.KeyName] = "None"
+            saveStore()
+            refreshKeyVisual()
         end)
 
         box.MouseButton1Click:Connect(function()
@@ -1586,22 +1623,27 @@ local function CreateTab(name, icon)
             box.BackgroundColor3 = THEME.AccentAmber
             box.TextColor3 = THEME.TextMain
 
-            local conn
-            conn = UserInputService.InputBegan:Connect(function(input, gp)
+            activeConn = UserInputService.InputBegan:Connect(function(input, gp)
                 if gp then return end
                 if input.UserInputType == Enum.UserInputType.Keyboard then
-                    Config.Keybinds[opts.KeyName] = input.KeyCode.Name
+                    local kc = input.KeyCode
+                    if kc == Enum.KeyCode.Backspace or kc == Enum.KeyCode.Delete or kc == Enum.KeyCode.Escape then
+                        Config.Keybinds[opts.KeyName] = "None"
+                    else
+                        Config.Keybinds[opts.KeyName] = kc.Name
+                    end
                     saveStore()
-                    box.Text = input.KeyCode.Name
-                    box.BackgroundColor3 = THEME.BgHeader
-                    box.TextColor3 = THEME.Accent
                     listeningFor = nil
-                    conn:Disconnect()
+                    if activeConn then
+                        activeConn:Disconnect()
+                        activeConn = nil
+                    end
+                    refreshKeyVisual()
                 end
             end)
         end)
 
-        return { Refresh = function() box.Text = Config.Keybinds[opts.KeyName] or "None" end }
+        return { Refresh = refreshKeyVisual }
     end
 
     function TabObj:AddButton(opts)
@@ -1896,7 +1938,7 @@ local function applyPlayerFilter()
     end
 end
 
--- 🔄 Cargar lista de Amigos Conectados y sus servidores/juegos
+-- 🔄 Cargar lista de Amigos Conectados y unión directa por Deep Link / TeleportService
 local isRefreshingFriends = false
 
 local function fetchPresenceMap(userIds)
@@ -1921,6 +1963,89 @@ local function fetchPresenceMap(userIds)
         end
     end)
     return map
+end
+
+local function joinExperienceOrServer(btn, origLabel, placeId, gameId)
+    if isHopping then return end
+    isHopping = true
+    activeTpBtn = btn
+    activeTpOrigText = origLabel
+    btn.Text = "⏳..."
+
+    -- Mismo juego (mismo PlaceId): TeleportService funciona nativamente
+    if placeId == game.PlaceId then
+        task.delay(4.5, function()
+            if isHopping and activeTpBtn == btn then
+                isHopping = false
+                activeTpBtn = nil
+                if btn and btn.Parent then
+                    btn.Text = "⚠️ Falló"
+                    task.delay(1.2, function()
+                        if btn and btn.Parent then btn.Text = origLabel end
+                    end)
+                end
+            end
+        end)
+
+        local tpOk = pcall(function()
+            if gameId and gameId ~= "" then
+                TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
+            else
+                TeleportService:Teleport(placeId, LocalPlayer)
+            end
+        end)
+        if not tpOk then
+            isHopping = false
+            activeTpBtn = nil
+            btn.Text = "Error"
+            task.delay(1.2, function()
+                if btn and btn.Parent then btn.Text = origLabel end
+            end)
+        end
+        return
+    end
+
+    -- Juego diferente (Cross-Universe): usar Deep Link nativo de Roblox (roblox://)
+    local deepLink = (gameId and gameId ~= "")
+        and string.format("roblox://experiences/start?placeId=%d&gameInstanceId=%s", placeId, gameId)
+        or string.format("roblox://experiences/start?placeId=%d", placeId)
+
+    local opened = pcall(function()
+        game:GetService("LinkingService"):OpenUrl(deepLink)
+    end)
+
+    if not opened then
+        opened = pcall(function()
+            game:GetService("GuiService"):OpenBrowserWindow(deepLink)
+        end)
+    end
+
+    if opened then
+        btn.Text = "✅ Abriendo"
+        task.delay(2.5, function()
+            isHopping = false
+            activeTpBtn = nil
+            if btn and btn.Parent then btn.Text = origLabel end
+        end)
+    else
+        local webUrl = string.format("https://www.roblox.com/games/%d", placeId)
+        pcall(function()
+            if setclipboard then setclipboard(webUrl) end
+        end)
+        pcall(function()
+            if gameId and gameId ~= "" then
+                TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
+            else
+                TeleportService:Teleport(placeId, LocalPlayer)
+            end
+        end)
+        btn.Text = "📋 Link"
+        task.delay(2.0, function()
+            isHopping = false
+            activeTpBtn = nil
+            if btn and btn.Parent then btn.Text = origLabel end
+        end)
+    end
 end
 
 local function refreshOnlineFriends()
@@ -2056,39 +2181,7 @@ local function refreshOnlineFriends()
                 gameLbl.TextXAlignment = Enum.TextXAlignment.Left
                 gameLbl.Parent = row
 
-                local function runTeleportWithTimeout(btn, origLabel, tpFn)
-                    if isHopping then return end
-                    isHopping = true
-                    activeTpBtn = btn
-                    activeTpOrigText = origLabel
-                    btn.Text = "⏳..."
-
-                    task.delay(4.5, function()
-                        if isHopping and activeTpBtn == btn then
-                            isHopping = false
-                            activeTpBtn = nil
-                            if btn and btn.Parent then
-                                btn.Text = "⚠️ Falló"
-                                task.delay(1.2, function()
-                                    if btn and btn.Parent then btn.Text = origLabel end
-                                end)
-                            end
-                        end
-                    end)
-
-                    local tpOk = pcall(tpFn)
-                    if not tpOk then
-                        isHopping = false
-                        activeTpBtn = nil
-                        btn.Text = "Error"
-                        task.delay(1.2, function()
-                            if btn and btn.Parent then btn.Text = origLabel end
-                        end)
-                    end
-                end
-
                 if canJoinInstance and placeId ~= game.PlaceId then
-                    -- Dos botones: SALA (instancia exacta) y JUEGO (experiencia general si Roblox bloquea el JobId cruzado)
                     local salaBtn = Instance.new("TextButton")
                     Stealth.RandomizeName(salaBtn)
                     salaBtn.Size = UDim2.new(0, 34, 0, 18)
@@ -2101,9 +2194,7 @@ local function refreshOnlineFriends()
                     salaBtn.Parent = row
                     Instance.new("UICorner", salaBtn).CornerRadius = UDim.new(0, 4)
                     salaBtn.MouseButton1Click:Connect(function()
-                        runTeleportWithTimeout(salaBtn, "SALA", function()
-                            TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
-                        end)
+                        joinExperienceOrServer(salaBtn, "SALA", placeId, gameId)
                     end)
 
                     local juegoBtn = Instance.new("TextButton")
@@ -2118,9 +2209,7 @@ local function refreshOnlineFriends()
                     juegoBtn.Parent = row
                     Instance.new("UICorner", juegoBtn).CornerRadius = UDim.new(0, 4)
                     juegoBtn.MouseButton1Click:Connect(function()
-                        runTeleportWithTimeout(juegoBtn, "JUEGO", function()
-                            TeleportService:Teleport(placeId, LocalPlayer)
-                        end)
+                        joinExperienceOrServer(juegoBtn, "JUEGO", placeId, nil)
                     end)
                 else
                     local joinBtn = Instance.new("TextButton")
@@ -2137,18 +2226,14 @@ local function refreshOnlineFriends()
                         joinBtn.TextColor3 = THEME.BgMain
                         joinBtn.Text = "UNIRSE"
                         joinBtn.MouseButton1Click:Connect(function()
-                            runTeleportWithTimeout(joinBtn, "UNIRSE", function()
-                                TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
-                            end)
+                            joinExperienceOrServer(joinBtn, "UNIRSE", placeId, gameId)
                         end)
                     elseif canJoinPlace then
                         joinBtn.BackgroundColor3 = THEME.Accent
                         joinBtn.TextColor3 = THEME.BgMain
                         joinBtn.Text = "JUEGO"
                         joinBtn.MouseButton1Click:Connect(function()
-                            runTeleportWithTimeout(joinBtn, "JUEGO", function()
-                                TeleportService:Teleport(placeId, LocalPlayer)
-                            end)
+                            joinExperienceOrServer(joinBtn, "JUEGO", placeId, nil)
                         end)
                     else
                         joinBtn.BackgroundColor3 = THEME.SwitchOff
@@ -2505,7 +2590,7 @@ for _, item in ipairs(quickSpecs) do
     end
 end
 
-TabConfig:AddSection("Atajos de Teclado (PC)")
+TabConfig:AddSection("Atajos de Teclado (PC) — ✕ para quitar")
 local keybindSpecs = {
     {Title = "Tecla TP (PC)",     KeyName = "Teleport", DesktopOnly = true},
     {Title = "Tecla Invisicam",   KeyName = "Invisicam"},
@@ -2755,22 +2840,26 @@ HubMaid:GiveTask(UserInputService.JumpRequest:Connect(function()
     end
 end))
 
+local function isKeyMatch(codeName, bindName)
+    return bindName and bindName ~= "" and bindName ~= "None" and codeName == bindName
+end
+
 HubMaid:GiveTask(UserInputService.InputBegan:Connect(function(input, gp)
     if gp or listeningFor or hubUnloaded then return end
     if input.UserInputType == Enum.UserInputType.Keyboard then
         local codeName = input.KeyCode.Name
         local kb = Config.Keybinds
-        if codeName == kb.Invisicam  then setFeatureState("Invisicam",  not State.Invisicam) end
-        if codeName == kb.Noclip     then setFeatureState("Noclip",     not State.Noclip) end
-        if codeName == kb.Fly        then setFeatureState("Fly",        not State.Fly) end
-        if codeName == kb.FreeCam    then setFeatureState("FreeCam",    not State.FreeCam) end
-        if codeName == kb.Fullbright then setFeatureState("Fullbright", not State.Fullbright) end
-        if codeName == kb.XRay       then setFeatureState("FPXRay",     not State.FPXRay) end
-        if codeName == kb.ESP        then setFeatureState("ESP",        not State.ESP) end
-        if codeName == kb.InfJump    then setFeatureState("InfJump",    not State.InfJump) end
-        if codeName == kb.Restore    then RestoreMap() end
-        if codeName == kb.Teleport   then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
-        if codeName == kb.Delete     then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
+        if isKeyMatch(codeName, kb.Invisicam)  then setFeatureState("Invisicam",  not State.Invisicam) end
+        if isKeyMatch(codeName, kb.Noclip)     then setFeatureState("Noclip",     not State.Noclip) end
+        if isKeyMatch(codeName, kb.Fly)        then setFeatureState("Fly",        not State.Fly) end
+        if isKeyMatch(codeName, kb.FreeCam)    then setFeatureState("FreeCam",    not State.FreeCam) end
+        if isKeyMatch(codeName, kb.Fullbright) then setFeatureState("Fullbright", not State.Fullbright) end
+        if isKeyMatch(codeName, kb.XRay)       then setFeatureState("FPXRay",     not State.FPXRay) end
+        if isKeyMatch(codeName, kb.ESP)        then setFeatureState("ESP",        not State.ESP) end
+        if isKeyMatch(codeName, kb.InfJump)    then setFeatureState("InfJump",    not State.InfJump) end
+        if isKeyMatch(codeName, kb.Restore)    then RestoreMap() end
+        if isKeyMatch(codeName, kb.Teleport)   then TeleportAt(Vector2.new(Mouse.X, Mouse.Y)) end
+        if isKeyMatch(codeName, kb.Delete)     then DeletePartAt(Vector2.new(Mouse.X, Mouse.Y)) end
     end
 end))
 
