@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + JSON Profiles
+-- Stealth Avanzado + Anti-Rubberband TP + Sesión & FPS
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -11,6 +11,8 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -187,6 +189,8 @@ local function buildDefaultProfile()
         UiScale = 1.0,
         FlySpeed = 50,
         FreeCamSpeed = 50,
+        AntiAFK = true,
+        FPSBooster = false,
         Keybinds = {
             Invisicam  = "V",
             Noclip     = "X",
@@ -357,6 +361,147 @@ local function rebuildXRayFilter()
         end
     end
     xrayRayParams.FilterDescendantsInstances = xrayFilterList
+end
+
+-- ==========================================
+-- ⚡ PACK DE SESIÓN Y RENDIMIENTO
+-- ==========================================
+local gfxBackup = setmetatable({}, { __mode = "k" })
+local savedGfxLighting = {}
+local fpsDescendantConn = nil
+
+local function optimizeSingleInstance(obj)
+    if obj:IsA("BasePart") then
+        if not gfxBackup[obj] then
+            gfxBackup[obj] = { Material = obj.Material, Reflectance = obj.Reflectance, CastShadow = obj.CastShadow }
+        end
+        obj.Material = Enum.Material.SmoothPlastic
+        obj.Reflectance = 0
+        obj.CastShadow = false
+    elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+        if not gfxBackup[obj] then
+            gfxBackup[obj] = { Enabled = obj.Enabled }
+        end
+        obj.Enabled = false
+    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+        if not gfxBackup[obj] then
+            gfxBackup[obj] = { Transparency = obj.Transparency }
+        end
+        obj.Transparency = 1
+    end
+end
+
+local function toggleFPSBooster(state)
+    Config.FPSBooster = state
+    saveStore()
+
+    if state then
+        savedGfxLighting = {
+            GlobalShadows = Lighting.GlobalShadows,
+            FogEnd = Lighting.FogEnd,
+            EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+            EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+        }
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        pcall(function()
+            Lighting.EnvironmentDiffuseScale = 0
+            Lighting.EnvironmentSpecularScale = 0
+        end)
+
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            optimizeSingleInstance(obj)
+        end
+
+        Stealth.Disconnect(fpsDescendantConn)
+        fpsDescendantConn = Stealth.HideConnections(Workspace.DescendantAdded:Connect(function(obj)
+            if Config.FPSBooster then
+                optimizeSingleInstance(obj)
+            end
+        end))
+    else
+        Stealth.Disconnect(fpsDescendantConn)
+        fpsDescendantConn = nil
+
+        if savedGfxLighting.GlobalShadows ~= nil and not State.Fullbright then
+            Lighting.GlobalShadows = savedGfxLighting.GlobalShadows
+            Lighting.FogEnd = savedGfxLighting.FogEnd
+            pcall(function()
+                Lighting.EnvironmentDiffuseScale = savedGfxLighting.EnvironmentDiffuseScale
+                Lighting.EnvironmentSpecularScale = savedGfxLighting.EnvironmentSpecularScale
+            end)
+        end
+
+        for obj, props in pairs(gfxBackup) do
+            if obj and obj.Parent then
+                for propName, origVal in pairs(props) do
+                    pcall(function() obj[propName] = origVal end)
+                end
+            end
+        end
+        gfxBackup = setmetatable({}, { __mode = "k" })
+    end
+end
+
+-- Anti-AFK (previene el kick de 20 minutos por inactividad)
+HubMaid:GiveTask(LocalPlayer.Idled:Connect(function()
+    if Config.AntiAFK and not hubUnloaded then
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.zero)
+        end)
+    end
+end))
+
+local function performRejoin(btn)
+    local origText = btn.Text
+    btn.Text = "⏳ Reconectando..."
+    local ok = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end)
+    if not ok then
+        btn.Text = "❌ No se pudo reconectar"
+        task.wait(1.5)
+        if btn and btn.Parent then btn.Text = origText end
+    end
+end
+
+local isHopping = false
+local function performServerHop(btn)
+    if isHopping then return end
+    isHopping = true
+    local origText = btn.Text
+    btn.Text = "🔍 Buscando servidor..."
+
+    task.spawn(function()
+        local ok, res = pcall(function()
+            local url = string.format(
+                "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100",
+                game.PlaceId
+            )
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
+
+        if ok and res and type(res.data) == "table" then
+            for _, srv in ipairs(res.data) do
+                if srv.id ~= game.JobId and tonumber(srv.playing) and tonumber(srv.maxPlayers) and srv.playing < srv.maxPlayers then
+                    btn.Text = "✅ Conectando..."
+                    local tpOk = pcall(function()
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, srv.id, LocalPlayer)
+                    end)
+                    if tpOk then
+                        isHopping = false
+                        return
+                    end
+                end
+            end
+        end
+
+        btn.Text = "⚠️ Sin servidores libres"
+        task.wait(1.5)
+        if btn and btn.Parent then btn.Text = origText end
+        isHopping = false
+    end)
 end
 
 -- ==========================================
@@ -661,8 +806,8 @@ local function toggleFullbright(state)
         Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
         Lighting.Brightness = savedLighting.Brightness
         Lighting.ClockTime = savedLighting.ClockTime
-        Lighting.FogEnd = savedLighting.FogEnd
-        Lighting.GlobalShadows = savedLighting.GlobalShadows
+        Lighting.FogEnd = Config.FPSBooster and 9e9 or savedLighting.FogEnd
+        Lighting.GlobalShadows = Config.FPSBooster and false or savedLighting.GlobalShadows
     end
 end
 
@@ -1374,7 +1519,6 @@ searchBox.Parent = TabPlayers.Page
 Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
 local searchStroke = applyNeonStroke(searchBox, THEME.Accent, 0.65, 1)
 
--- Barra de control rápido de Spectate (Anterior / Volver a mí / Siguiente)
 local SpectateBar = Instance.new("Frame")
 Stealth.RandomizeName(SpectateBar)
 SpectateBar.Size = UDim2.new(1, 0, 0, 24)
@@ -1427,7 +1571,7 @@ PlayerListLayout.Padding = UDim.new(0, 4)
 PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerListLayout.Parent = PlayerListContainer
 
-local playerCards = {} -- [Player] = { Row, DistLabel, ViewBtn, Stroke, IsFriend }
+local playerCards = {}
 
 local function updateSpectateVisuals()
     SelfSpecBtn.BackgroundColor3 = spectatingPlayer and THEME.BgCardOn or THEME.BgCard
@@ -1607,7 +1751,6 @@ HubMaid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
     applyPlayerFilter()
 end))
 
--- Bucle ligero de distancias y ordenamiento dinámico (amigos arriba + cercanía)
 task.spawn(function()
     while not hubUnloaded do
         if MainFrame.Visible and ActiveTabName == "Jug." then
@@ -1628,7 +1771,36 @@ task.spawn(function()
     end
 end)
 
--- --- PESTAÑA 4: AJUSTES, TEMAS, PERFILES Y KEYBINDS ---
+-- --- PESTAÑA 4: AJUSTES, SESIÓN/FPS, TEMAS, PERFILES Y KEYBINDS ---
+TabConfig:AddSection("Sesión y Rendimiento")
+
+local antiAfkToggle = TabConfig:AddToggle({
+    Icon = "🛡️",
+    Title = "Anti-AFK (Evitar Kick)",
+    Default = Config.AntiAFK ~= false,
+    Callback = function(v)
+        Config.AntiAFK = v
+        saveStore()
+    end
+})
+
+local fpsBoosterToggle = TabConfig:AddToggle({
+    Icon = "⚡",
+    Title = "FPS Booster (Optimizar Gráficos)",
+    Default = Config.FPSBooster == true,
+    Callback = toggleFPSBooster
+})
+
+TabConfig:AddButton({
+    Title = "🔁 Rejoin (Reconectar Servidor)",
+    Callback = performRejoin
+})
+
+TabConfig:AddButton({
+    Title = "🌐 Server Hop (Cambiar Servidor)",
+    Callback = performServerHop
+})
+
 TabConfig:AddSection("Apariencia y Escala")
 
 local function applyThemeByName(themeName)
@@ -1645,7 +1817,7 @@ local function applyThemeByName(themeName)
     saveStore()
 end
 
-TabConfig:AddButton({
+local themeBtn = TabConfig:AddButton({
     Title = "🎨 Tema: " .. Config.Theme .. " (Click para cambiar)",
     Callback = function(btn)
         local idx = table.find(THEME_ORDER, Config.Theme) or 1
@@ -1703,11 +1875,14 @@ local function switchProfile(profileName)
     saveStore()
 
     applyThemeByName(Config.Theme)
+    themeBtn.Text = "🎨 Tema: " .. Config.Theme .. " (Click para cambiar)"
     UiScaler.Scale = Config.UiScale
     scaleSlider.Set(Config.UiScale)
     glassSlider.Set(Config.GlassTransparency)
     flySlider.Set(Config.FlySpeed)
     freeCamSlider.Set(Config.FreeCamSpeed)
+    antiAfkToggle.Set(Config.AntiAFK ~= false, true)
+    fpsBoosterToggle.Set(Config.FPSBooster == true, false)
     applyAllPositionsFromConfig()
     for _, refreshFn in ipairs(keybindRefreshers) do refreshFn() end
 end
@@ -1800,6 +1975,11 @@ TabConfig:AddButton({
         if State.FreeCam then toggleFreeCam(false) end
         if State.Fullbright then toggleFullbright(false) end
         if State.ThirdPerson then toggleThirdPerson(false) end
+        if Config.FPSBooster then
+            toggleFPSBooster(false)
+            Config.FPSBooster = true
+            saveStore()
+        end
         if spectatingPlayer then resetSpectate() end
         RestoreMap()
 
@@ -1809,6 +1989,10 @@ TabConfig:AddButton({
         HubMaid:DoCleaning()
     end
 })
+
+if Config.FPSBooster then
+    toggleFPSBooster(true)
+end
 
 selectTab("Mov.")
 
