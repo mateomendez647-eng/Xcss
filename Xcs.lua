@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Sesión & FPS
+-- Stealth Avanzado + Anti-Rubberband TP + Instant Interact + Server Hop
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -13,6 +13,7 @@ local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -207,23 +208,25 @@ local function buildDefaultProfile()
         QuickVisible = {
             TPS = true, Invisicam = true, FPXRay = true, ESP = true,
             DeleteMode = true, Noclip = true, InfJump = true, Fly = true,
-            FreeCam = true, Fullbright = true, ThirdPerson = true, Restore = true
+            FreeCam = true, Fullbright = true, ThirdPerson = true,
+            InstantInteract = true, Restore = true
         },
         Positions = {
-            MainFrame         = {x = 20,  y = 90},
-            MiniBtn           = {x = 15,  y = 200},
-            Quick_TPS         = {x = 60,  y = 100},
-            Quick_Invisicam   = {x = 100, y = 100},
-            Quick_FPXRay      = {x = 140, y = 100},
-            Quick_ESP         = {x = 180, y = 100},
-            Quick_DeleteMode  = {x = 220, y = 100},
-            Quick_Noclip      = {x = 60,  y = 145},
-            Quick_InfJump     = {x = 100, y = 145},
-            Quick_Fly         = {x = 140, y = 145},
-            Quick_FreeCam     = {x = 180, y = 145},
-            Quick_Fullbright  = {x = 220, y = 145},
-            Quick_ThirdPerson = {x = 260, y = 145},
-            Quick_Restore     = {x = 60,  y = 190},
+            MainFrame             = {x = 20,  y = 90},
+            MiniBtn               = {x = 15,  y = 200},
+            Quick_TPS             = {x = 60,  y = 100},
+            Quick_Invisicam       = {x = 100, y = 100},
+            Quick_FPXRay          = {x = 140, y = 100},
+            Quick_ESP             = {x = 180, y = 100},
+            Quick_DeleteMode      = {x = 220, y = 100},
+            Quick_Noclip          = {x = 60,  y = 145},
+            Quick_InfJump         = {x = 100, y = 145},
+            Quick_Fly             = {x = 140, y = 145},
+            Quick_FreeCam         = {x = 180, y = 145},
+            Quick_Fullbright      = {x = 220, y = 145},
+            Quick_ThirdPerson     = {x = 260, y = 145},
+            Quick_Restore         = {x = 60,  y = 190},
+            Quick_InstantInteract = {x = 100, y = 190},
         }
     }
 end
@@ -311,6 +314,7 @@ local State = {
     FreeCam = false,
     Fullbright = false,
     ThirdPerson = false,
+    InstantInteract = false,
 }
 
 local quickButtonsMaster = true
@@ -443,7 +447,6 @@ local function toggleFPSBooster(state)
     end
 end
 
--- Anti-AFK (previene el kick de 20 minutos por inactividad)
 HubMaid:GiveTask(LocalPlayer.Idled:Connect(function()
     if Config.AntiAFK and not hubUnloaded then
         pcall(function()
@@ -467,17 +470,19 @@ local function performRejoin(btn)
 end
 
 local isHopping = false
-local function performServerHop(btn)
+local function performServerHop(btn, sortOrder)
     if isHopping then return end
     isHopping = true
     local origText = btn.Text
-    btn.Text = "🔍 Buscando servidor..."
+    local order = sortOrder or "Asc"
+    btn.Text = (order == "Desc") and "🔍 Buscando servidor lleno..." or "🔍 Buscando servidor..."
 
     task.spawn(function()
         local ok, res = pcall(function()
             local url = string.format(
-                "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100",
-                game.PlaceId
+                "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=%s&limit=100",
+                game.PlaceId,
+                order
             )
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
@@ -485,7 +490,7 @@ local function performServerHop(btn)
         if ok and res and type(res.data) == "table" then
             for _, srv in ipairs(res.data) do
                 if srv.id ~= game.JobId and tonumber(srv.playing) and tonumber(srv.maxPlayers) and srv.playing < srv.maxPlayers then
-                    btn.Text = "✅ Conectando..."
+                    btn.Text = "✅ Conectando (" .. srv.playing .. "/" .. srv.maxPlayers .. ")..."
                     local tpOk = pcall(function()
                         TeleportService:TeleportToPlaceInstance(game.PlaceId, srv.id, LocalPlayer)
                     end)
@@ -550,6 +555,58 @@ local function setFeatureState(key, enabled, skipCallback)
         ToggleUpdaters[key](enabled, skipCallback)
     else
         syncQuickBtnVisual(key, enabled)
+    end
+end
+
+-- ⚡ Interactuar sin espera (ProximityPrompt HoldDuration = 0)
+local originalPromptDurations = setmetatable({}, { __mode = "k" })
+local instantPromptShownConn = nil
+local instantPromptAddedConn = nil
+
+local function makePromptInstant(prompt)
+    if not prompt or not prompt:IsA("ProximityPrompt") then return end
+    if originalPromptDurations[prompt] == nil then
+        originalPromptDurations[prompt] = prompt.HoldDuration
+    end
+    prompt.HoldDuration = 0
+end
+
+local function toggleInstantInteract(state)
+    State.InstantInteract = state
+    syncQuickBtnVisual("InstantInteract", state)
+
+    if state then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                makePromptInstant(obj)
+            end
+        end
+
+        Stealth.Disconnect(instantPromptShownConn)
+        instantPromptShownConn = Stealth.HideConnections(ProximityPromptService.PromptShown:Connect(function(prompt)
+            if State.InstantInteract then
+                makePromptInstant(prompt)
+            end
+        end))
+
+        Stealth.Disconnect(instantPromptAddedConn)
+        instantPromptAddedConn = Stealth.HideConnections(Workspace.DescendantAdded:Connect(function(obj)
+            if State.InstantInteract and obj:IsA("ProximityPrompt") then
+                makePromptInstant(obj)
+            end
+        end))
+    else
+        Stealth.Disconnect(instantPromptShownConn)
+        instantPromptShownConn = nil
+        Stealth.Disconnect(instantPromptAddedConn)
+        instantPromptAddedConn = nil
+
+        for prompt, origDuration in pairs(originalPromptDurations) do
+            if prompt and prompt.Parent then
+                pcall(function() prompt.HoldDuration = origDuration end)
+            end
+        end
+        originalPromptDurations = setmetatable({}, { __mode = "k" })
     end
 end
 
@@ -1483,7 +1540,7 @@ local flySlider = TabMove:AddSlider({
     OnRelease = function() saveStore() end
 })
 
--- --- PESTAÑA 2: VISUALES Y CÁMARA ---
+-- --- PESTAÑA 2: VISUALES, CÁMARA E INTERACCIÓN ---
 TabVisuals:AddSection("Cámara y Visión")
 TabVisuals:AddToggle({ Key = "ESP",         Icon = "🎯", Title = "ESP Jugadores",       Callback = toggleESP })
 TabVisuals:AddToggle({ Key = "Invisicam",   Icon = "👁️", Title = "Invisicam + Zoom",    Callback = toggleInvisicam })
@@ -1498,8 +1555,9 @@ local freeCamSlider = TabVisuals:AddSlider({
     OnRelease = function() saveStore() end
 })
 
-TabVisuals:AddSection("Edición de Mapa")
-TabVisuals:AddToggle({ Key = "DeleteMode", Icon = "🗑️", Title = "Borrador de Paredes", Callback = toggleDeleteMode })
+TabVisuals:AddSection("Interacción y Mapa")
+TabVisuals:AddToggle({ Key = "InstantInteract", Icon = "⚡", Title = "Interactuar sin Espera", Callback = toggleInstantInteract })
+TabVisuals:AddToggle({ Key = "DeleteMode",      Icon = "🗑️", Title = "Borrador de Paredes",    Callback = toggleDeleteMode })
 TabVisuals:AddButton({
     Title = "♻️ Restaurar Paredes Borradas",
     Callback = RestoreMap
@@ -1797,8 +1855,17 @@ TabConfig:AddButton({
 })
 
 TabConfig:AddButton({
-    Title = "🌐 Server Hop (Cambiar Servidor)",
-    Callback = performServerHop
+    Title = "🔥 Server Hop (Más Gente)",
+    Callback = function(btn)
+        performServerHop(btn, "Desc")
+    end
+})
+
+TabConfig:AddButton({
+    Title = "🌐 Server Hop (Menos Gente)",
+    Callback = function(btn)
+        performServerHop(btn, "Asc")
+    end
 })
 
 TabConfig:AddSection("Apariencia y Escala")
@@ -1908,18 +1975,19 @@ TabConfig:AddButton({
 
 TabConfig:AddSection("Botones Flotantes Rápidos")
 local quickSpecs = {
-    {Key = "TPS",         Label = "Botón TPS (Toque)",     TouchOnly = true},
-    {Key = "Invisicam",   Label = "Botón Invisicam (INV)"},
-    {Key = "FPXRay",      Label = "Botón FP X-Ray (XRY)"},
-    {Key = "ESP",         Label = "Botón ESP (ESP)"},
-    {Key = "DeleteMode",  Label = "Botón Borrador (DEL)"},
-    {Key = "Noclip",      Label = "Botón Noclip (NOC)"},
-    {Key = "InfJump",     Label = "Botón Inf Jump (JMP)"},
-    {Key = "Fly",         Label = "Botón Fly (FLY)"},
-    {Key = "FreeCam",     Label = "Botón Free Cam (CAM)"},
-    {Key = "Fullbright",  Label = "Botón Fullbright (LGT)"},
-    {Key = "ThirdPerson", Label = "Botón Third Person (3PS)"},
-    {Key = "Restore",     Label = "Botón Restaurar (RST)"},
+    {Key = "TPS",             Label = "Botón TPS (Toque)",     TouchOnly = true},
+    {Key = "Invisicam",       Label = "Botón Invisicam (INV)"},
+    {Key = "FPXRay",          Label = "Botón FP X-Ray (XRY)"},
+    {Key = "ESP",             Label = "Botón ESP (ESP)"},
+    {Key = "InstantInteract", Label = "Botón Sin Espera (INT)"},
+    {Key = "DeleteMode",      Label = "Botón Borrador (DEL)"},
+    {Key = "Noclip",          Label = "Botón Noclip (NOC)"},
+    {Key = "InfJump",         Label = "Botón Inf Jump (JMP)"},
+    {Key = "Fly",             Label = "Botón Fly (FLY)"},
+    {Key = "FreeCam",         Label = "Botón Free Cam (CAM)"},
+    {Key = "Fullbright",      Label = "Botón Fullbright (LGT)"},
+    {Key = "ThirdPerson",     Label = "Botón Third Person (3PS)"},
+    {Key = "Restore",         Label = "Botón Restaurar (RST)"},
 }
 
 for _, item in ipairs(quickSpecs) do
@@ -1975,6 +2043,7 @@ TabConfig:AddButton({
         if State.FreeCam then toggleFreeCam(false) end
         if State.Fullbright then toggleFullbright(false) end
         if State.ThirdPerson then toggleThirdPerson(false) end
+        if State.InstantInteract then toggleInstantInteract(false) end
         if Config.FPSBooster then
             toggleFPSBooster(false)
             Config.FPSBooster = true
@@ -2108,17 +2177,18 @@ end
 if isTouchDevice then
     createQuickBtn("TPS", "TPS", function() setFeatureState("TPS", not State.TPS) end)
 end
-createQuickBtn("Invisicam",   "INV", function() setFeatureState("Invisicam",   not State.Invisicam) end)
-createQuickBtn("FPXRay",      "XRY", function() setFeatureState("FPXRay",      not State.FPXRay) end)
-createQuickBtn("ESP",         "ESP", function() setFeatureState("ESP",         not State.ESP) end)
-createQuickBtn("DeleteMode",  "DEL", function() setFeatureState("DeleteMode",  not State.DeleteMode) end)
-createQuickBtn("Noclip",      "NOC", function() setFeatureState("Noclip",      not State.Noclip) end)
-createQuickBtn("InfJump",     "JMP", function() setFeatureState("InfJump",     not State.InfJump) end)
-createQuickBtn("Fly",         "FLY", function() setFeatureState("Fly",         not State.Fly) end)
-createQuickBtn("FreeCam",     "CAM", function() setFeatureState("FreeCam",     not State.FreeCam) end)
-createQuickBtn("Fullbright",  "LGT", function() setFeatureState("Fullbright",  not State.Fullbright) end)
-createQuickBtn("ThirdPerson", "3PS", function() setFeatureState("ThirdPerson", not State.ThirdPerson) end)
-createQuickBtn("Restore",     "RST", function(btn, stroke)
+createQuickBtn("Invisicam",       "INV", function() setFeatureState("Invisicam",       not State.Invisicam) end)
+createQuickBtn("FPXRay",          "XRY", function() setFeatureState("FPXRay",          not State.FPXRay) end)
+createQuickBtn("ESP",             "ESP", function() setFeatureState("ESP",             not State.ESP) end)
+createQuickBtn("InstantInteract", "INT", function() setFeatureState("InstantInteract", not State.InstantInteract) end)
+createQuickBtn("DeleteMode",      "DEL", function() setFeatureState("DeleteMode",      not State.DeleteMode) end)
+createQuickBtn("Noclip",          "NOC", function() setFeatureState("Noclip",          not State.Noclip) end)
+createQuickBtn("InfJump",         "JMP", function() setFeatureState("InfJump",         not State.InfJump) end)
+createQuickBtn("Fly",             "FLY", function() setFeatureState("Fly",             not State.Fly) end)
+createQuickBtn("FreeCam",         "CAM", function() setFeatureState("FreeCam",         not State.FreeCam) end)
+createQuickBtn("Fullbright",      "LGT", function() setFeatureState("Fullbright",      not State.Fullbright) end)
+createQuickBtn("ThirdPerson",     "3PS", function() setFeatureState("ThirdPerson",     not State.ThirdPerson) end)
+createQuickBtn("Restore",         "RST", function(btn, stroke)
     RestoreMap()
     btn.TextColor3 = THEME.AccentGreen
     stroke.Color = THEME.AccentGreen
