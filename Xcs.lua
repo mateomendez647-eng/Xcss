@@ -1898,6 +1898,31 @@ end
 
 -- 🔄 Cargar lista de Amigos Conectados y sus servidores/juegos
 local isRefreshingFriends = false
+
+local function fetchPresenceMap(userIds)
+    local map = {}
+    if #userIds == 0 then return map end
+    pcall(function()
+        local reqFn = (syn and syn.request) or http_request or request or (http and http.request)
+        if not reqFn then return end
+        local res = reqFn({
+            Url = "https://presence.roblox.com/v1/presence/users",
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = HttpService:JSONEncode({ userIds = userIds })
+        })
+        if res and res.Body then
+            local decoded = HttpService:JSONDecode(res.Body)
+            if decoded and type(decoded.userPresences) == "table" then
+                for _, item in ipairs(decoded.userPresences) do
+                    map[tonumber(item.userId)] = item
+                end
+            end
+        end
+    end)
+    return map
+end
+
 local function refreshOnlineFriends()
     if isRefreshingFriends then return end
     isRefreshingFriends = true
@@ -1914,9 +1939,39 @@ local function refreshOnlineFriends()
         end)
 
         if ok and type(onlineList) == "table" and #onlineList > 0 then
+            local ids = {}
+            for _, f in ipairs(onlineList) do
+                local uid = tonumber(f.VisitorId)
+                if uid and uid > 0 then table.insert(ids, uid) end
+            end
+            local presenceMap = fetchPresenceMap(ids)
+
+            for _, f in ipairs(onlineList) do
+                local uid = tonumber(f.VisitorId) or 0
+                local pInfo = presenceMap[uid]
+                if pInfo then
+                    if (not f.PlaceId or tonumber(f.PlaceId) == 0) and tonumber(pInfo.placeId) and tonumber(pInfo.placeId) > 0 then
+                        f.PlaceId = tonumber(pInfo.placeId)
+                    end
+                    if (not f.GameId or f.GameId == "") and pInfo.gameId and pInfo.gameId ~= "" then
+                        f.GameId = tostring(pInfo.gameId)
+                    end
+                    f._presenceType = tonumber(pInfo.userPresenceType) or 0
+                    if pInfo.lastLocation and pInfo.lastLocation ~= "" then
+                        f.LastLocation = pInfo.lastLocation
+                    end
+                else
+                    f._presenceType = (tonumber(f.PlaceId) and tonumber(f.PlaceId) > 0) and 2 or 1
+                end
+            end
+
             table.sort(onlineList, function(a, b)
-                local scoreA = (a.PlaceId and a.PlaceId > 0 and a.GameId and a.GameId ~= "") and 1 or ((a.PlaceId and a.PlaceId > 0) and 2 or 3)
-                local scoreB = (b.PlaceId and b.PlaceId > 0 and b.GameId and b.GameId ~= "") and 1 or ((b.PlaceId and b.PlaceId > 0) and 2 or 3)
+                local pA = tonumber(a.PlaceId) or 0
+                local pB = tonumber(b.PlaceId) or 0
+                local gA = tostring(a.GameId or "")
+                local gB = tostring(b.GameId or "")
+                local scoreA = (pA > 0 and gA ~= "") and 1 or ((pA > 0) and 2 or ((a._presenceType == 2) and 3 or 4))
+                local scoreB = (pB > 0 and gB ~= "") and 1 or ((pB > 0) and 2 or ((b._presenceType == 2) and 3 or 4))
                 if scoreA ~= scoreB then return scoreA < scoreB end
                 return tostring(a.DisplayName or a.UserName) < tostring(b.DisplayName or b.UserName)
             end)
@@ -1929,11 +1984,18 @@ local function refreshOnlineFriends()
                 local gameId = tostring(f.GameId or "")
                 local inSameServer = (gameId ~= "" and gameId == game.JobId)
                 local canJoinInstance = (placeId > 0 and gameId ~= "" and not inSameServer)
-                local canJoinPlace = (placeId > 0 and not canJoinInstance and not inSameServer)
+                local canJoinPlace = (placeId > 0 and not inSameServer)
+                local isPrivateInGame = (placeId == 0 and f._presenceType == 2)
 
                 local locText = tostring(f.LastLocation or "")
-                if locText == "" then
-                    locText = (placeId > 0) and "En un juego (Privado)" or "En línea (Web/Menú)"
+                if locText == "" or locText == "Website" then
+                    if placeId > 0 then
+                        locText = "En experiencia"
+                    elseif isPrivateInGame then
+                        locText = "En juego (Unión privada)"
+                    else
+                        locText = "En línea (Web/Menú)"
+                    end
                 end
 
                 local row = Instance.new("Frame")
@@ -1970,7 +2032,7 @@ local function refreshOnlineFriends()
 
                 local nameLbl = Instance.new("TextLabel")
                 Stealth.RandomizeName(nameLbl)
-                nameLbl.Size = UDim2.new(0.56, 0, 0, 14)
+                nameLbl.Size = UDim2.new(0.46, 0, 0, 14)
                 nameLbl.Position = UDim2.new(0, 30, 0, 3)
                 nameLbl.BackgroundTransparency = 1
                 nameLbl.Text = "⭐ " .. dName
@@ -1983,7 +2045,7 @@ local function refreshOnlineFriends()
 
                 local gameLbl = Instance.new("TextLabel")
                 Stealth.RandomizeName(gameLbl)
-                gameLbl.Size = UDim2.new(0.56, 0, 0, 11)
+                gameLbl.Size = UDim2.new(0.46, 0, 0, 11)
                 gameLbl.Position = UDim2.new(0, 30, 0, 17)
                 gameLbl.BackgroundTransparency = 1
                 gameLbl.Text = inSameServer and "✅ En tu mismo servidor" or ("🎮 " .. locText)
@@ -1994,62 +2056,106 @@ local function refreshOnlineFriends()
                 gameLbl.TextXAlignment = Enum.TextXAlignment.Left
                 gameLbl.Parent = row
 
-                local joinBtn = Instance.new("TextButton")
-                Stealth.RandomizeName(joinBtn)
-                joinBtn.Size = UDim2.new(0, 48, 0, 18)
-                joinBtn.Position = UDim2.new(1, -52, 0.5, -9)
-                joinBtn.Font = Enum.Font.GothamBold
-                joinBtn.TextSize = 7
-                joinBtn.Parent = row
-                Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 4)
+                local function runTeleportWithTimeout(btn, origLabel, tpFn)
+                    if isHopping then return end
+                    isHopping = true
+                    activeTpBtn = btn
+                    activeTpOrigText = origLabel
+                    btn.Text = "⏳..."
 
-                if canJoinInstance then
-                    joinBtn.BackgroundColor3 = THEME.AccentGreen
-                    joinBtn.TextColor3 = THEME.BgMain
-                    joinBtn.Text = "UNIRSE"
-                    joinBtn.MouseButton1Click:Connect(function()
-                        if isHopping then return end
-                        isHopping = true
-                        activeTpBtn = joinBtn
-                        activeTpOrigText = "UNIRSE"
-                        joinBtn.Text = "⏳..."
-                        local tpOk = pcall(function()
+                    task.delay(4.5, function()
+                        if isHopping and activeTpBtn == btn then
+                            isHopping = false
+                            activeTpBtn = nil
+                            if btn and btn.Parent then
+                                btn.Text = "⚠️ Falló"
+                                task.delay(1.2, function()
+                                    if btn and btn.Parent then btn.Text = origLabel end
+                                end)
+                            end
+                        end
+                    end)
+
+                    local tpOk = pcall(tpFn)
+                    if not tpOk then
+                        isHopping = false
+                        activeTpBtn = nil
+                        btn.Text = "Error"
+                        task.delay(1.2, function()
+                            if btn and btn.Parent then btn.Text = origLabel end
+                        end)
+                    end
+                end
+
+                if canJoinInstance and placeId ~= game.PlaceId then
+                    -- Dos botones: SALA (instancia exacta) y JUEGO (experiencia general si Roblox bloquea el JobId cruzado)
+                    local salaBtn = Instance.new("TextButton")
+                    Stealth.RandomizeName(salaBtn)
+                    salaBtn.Size = UDim2.new(0, 34, 0, 18)
+                    salaBtn.Position = UDim2.new(1, -74, 0.5, -9)
+                    salaBtn.BackgroundColor3 = THEME.AccentGreen
+                    salaBtn.TextColor3 = THEME.BgMain
+                    salaBtn.Text = "SALA"
+                    salaBtn.Font = Enum.Font.GothamBold
+                    salaBtn.TextSize = 7
+                    salaBtn.Parent = row
+                    Instance.new("UICorner", salaBtn).CornerRadius = UDim.new(0, 4)
+                    salaBtn.MouseButton1Click:Connect(function()
+                        runTeleportWithTimeout(salaBtn, "SALA", function()
                             TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
                         end)
-                        if not tpOk then
-                            isHopping = false
-                            joinBtn.Text = "Error"
-                            task.delay(1.5, function()
-                                if joinBtn and joinBtn.Parent then joinBtn.Text = "UNIRSE" end
-                            end)
-                        end
                     end)
-                elseif canJoinPlace then
-                    joinBtn.BackgroundColor3 = THEME.Accent
-                    joinBtn.TextColor3 = THEME.BgMain
-                    joinBtn.Text = "JUEGO"
-                    joinBtn.MouseButton1Click:Connect(function()
-                        if isHopping then return end
-                        isHopping = true
-                        activeTpBtn = joinBtn
-                        activeTpOrigText = "JUEGO"
-                        joinBtn.Text = "⏳..."
-                        local tpOk = pcall(function()
+
+                    local juegoBtn = Instance.new("TextButton")
+                    Stealth.RandomizeName(juegoBtn)
+                    juegoBtn.Size = UDim2.new(0, 34, 0, 18)
+                    juegoBtn.Position = UDim2.new(1, -37, 0.5, -9)
+                    juegoBtn.BackgroundColor3 = THEME.Accent
+                    juegoBtn.TextColor3 = THEME.BgMain
+                    juegoBtn.Text = "JUEGO"
+                    juegoBtn.Font = Enum.Font.GothamBold
+                    juegoBtn.TextSize = 7
+                    juegoBtn.Parent = row
+                    Instance.new("UICorner", juegoBtn).CornerRadius = UDim.new(0, 4)
+                    juegoBtn.MouseButton1Click:Connect(function()
+                        runTeleportWithTimeout(juegoBtn, "JUEGO", function()
                             TeleportService:Teleport(placeId, LocalPlayer)
                         end)
-                        if not tpOk then
-                            isHopping = false
-                            joinBtn.Text = "Error"
-                            task.delay(1.5, function()
-                                if joinBtn and joinBtn.Parent then joinBtn.Text = "JUEGO" end
-                            end)
-                        end
                     end)
                 else
-                    joinBtn.BackgroundColor3 = THEME.SwitchOff
-                    joinBtn.TextColor3 = THEME.TextMuted
-                    joinBtn.AutoButtonColor = false
-                    joinBtn.Text = inSameServer and "AQUÍ" or "WEB"
+                    local joinBtn = Instance.new("TextButton")
+                    Stealth.RandomizeName(joinBtn)
+                    joinBtn.Size = UDim2.new(0, 52, 0, 18)
+                    joinBtn.Position = UDim2.new(1, -56, 0.5, -9)
+                    joinBtn.Font = Enum.Font.GothamBold
+                    joinBtn.TextSize = 7
+                    joinBtn.Parent = row
+                    Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 4)
+
+                    if canJoinInstance then
+                        joinBtn.BackgroundColor3 = THEME.AccentGreen
+                        joinBtn.TextColor3 = THEME.BgMain
+                        joinBtn.Text = "UNIRSE"
+                        joinBtn.MouseButton1Click:Connect(function()
+                            runTeleportWithTimeout(joinBtn, "UNIRSE", function()
+                                TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
+                            end)
+                        end)
+                    elseif canJoinPlace then
+                        joinBtn.BackgroundColor3 = THEME.Accent
+                        joinBtn.TextColor3 = THEME.BgMain
+                        joinBtn.Text = "JUEGO"
+                        joinBtn.MouseButton1Click:Connect(function()
+                            runTeleportWithTimeout(joinBtn, "JUEGO", function()
+                                TeleportService:Teleport(placeId, LocalPlayer)
+                            end)
+                        end)
+                    else
+                        joinBtn.BackgroundColor3 = THEME.SwitchOff
+                        joinBtn.TextColor3 = isPrivateInGame and THEME.AccentAmber or THEME.TextMuted
+                        joinBtn.AutoButtonColor = false
+                        joinBtn.Text = inSameServer and "AQUÍ" or (isPrivateInGame and "PRIVADO" or "WEB")
+                    end
                 end
 
                 table.insert(friendCards, {
