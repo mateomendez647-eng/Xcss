@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + ESP Labels + Lock Buttons
+-- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + ESP Labels
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -194,7 +194,6 @@ local function buildDefaultProfile()
         FreeCamSpeed = 50,
         AntiAFK = true,
         FPSBooster = false,
-        LockButtons = false,
         Keybinds = {
             Invisicam  = "V",
             Noclip     = "X",
@@ -2781,8 +2780,6 @@ local function applyAllPositionsFromConfig()
     end
 end
 
-local lockButtonsToggle
-
 local function switchProfile(profileName)
     Store.ActiveProfile = profileName
     if not Store.Profiles[profileName] then
@@ -2801,9 +2798,6 @@ local function switchProfile(profileName)
     freeCamSlider.Set(Config.FreeCamSpeed)
     antiAfkToggle.Set(Config.AntiAFK ~= false, true)
     fpsBoosterToggle.Set(Config.FPSBooster == true, false)
-    if lockButtonsToggle then
-        lockButtonsToggle.Set(Config.LockButtons == true, true)
-    end
     applyAllPositionsFromConfig()
     for _, refreshFn in ipairs(keybindRefreshers) do refreshFn() end
 end
@@ -2828,16 +2822,6 @@ TabConfig:AddButton({
 })
 
 TabConfig:AddSection("Botones Flotantes Rápidos")
-
-lockButtonsToggle = TabConfig:AddToggle({
-    Icon = "🔒",
-    Title = "Bloquear Posición de Botones",
-    Default = Config.LockButtons == true,
-    Callback = function(val)
-        Config.LockButtons = val
-        saveStore()
-    end
-})
 
 local quickSpecs = {
     {Key = "TPS",             Label = "Botón TPS (Toque)",     TouchOnly = true},
@@ -3008,16 +2992,12 @@ local function createQuickBtn(name, shortText, onClick, isActionBtn)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             startPos = input.Position
             isDragging = false
-            if not Config.LockButtons then
-                dragStartScreen = input.Position
-                initBtnPos = btn.Position
-            else
-                dragStartScreen = nil
-            end
+            dragStartScreen = input.Position
+            initBtnPos = btn.Position
         end
     end)
     btn.InputChanged:Connect(function(input)
-        if not Config.LockButtons and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and dragStartScreen then
+        if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and dragStartScreen then
             if (input.Position - dragStartScreen).Magnitude > 6 then
                 isDragging = true
                 local delta = input.Position - dragStartScreen
@@ -3032,7 +3012,7 @@ local function createQuickBtn(name, shortText, onClick, isActionBtn)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             if startPos and not isDragging then
                 onClick(btn, stroke)
-            elseif isDragging and not Config.LockButtons then
+            elseif isDragging then
                 local snap = 35
                 for otherName, otherBtn in pairs(QuickButtons) do
                     if otherName ~= name and otherBtn.Visible then
