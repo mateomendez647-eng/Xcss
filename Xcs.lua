@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Server Hop
+-- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Mute + Server Hop
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -1782,6 +1782,17 @@ local PrevSpecBtn, prevSpecStroke = makeSpecNavBtn("◀", UDim2.new(0, 0, 0, 0),
 local SelfSpecBtn, selfSpecStroke = makeSpecNavBtn("🏠 Mi Cámara", UDim2.new(0, 32, 0, 0), UDim2.new(1, -64, 1, 0))
 local NextSpecBtn, nextSpecStroke = makeSpecNavBtn("▶", UDim2.new(1, -28, 0, 0),    UDim2.new(0, 28, 1, 0))
 
+local MuteAllBtn = Instance.new("TextButton")
+Stealth.RandomizeName(MuteAllBtn)
+MuteAllBtn.Size = UDim2.new(1, 0, 0, 22)
+MuteAllBtn.BackgroundTransparency = 0.15
+MuteAllBtn.Text = "🔇 Silenciar a Todos"
+MuteAllBtn.Font = Enum.Font.GothamBold
+MuteAllBtn.TextSize = 8
+MuteAllBtn.Parent = TabPlayers.Page
+Instance.new("UICorner", MuteAllBtn).CornerRadius = UDim.new(0, 6)
+local muteAllStroke = applyNeonStroke(MuteAllBtn, THEME.Accent, 0.5, 1)
+
 local RefreshFriendsBtn = Instance.new("TextButton")
 Stealth.RandomizeName(RefreshFriendsBtn)
 RefreshFriendsBtn.Size = UDim2.new(1, 0, 0, 24)
@@ -1822,6 +1833,122 @@ FriendsListLayout.Parent = FriendsListContainer
 local playerCards = {}
 local friendCards = {}
 
+-- 🔇 SISTEMA DE SILENCIO DE JUGADORES (VOICE CHAT + SONIDOS DE PERSONAJE)
+local mutedPlayers = {}
+local muteAllActive = false
+local originalSoundVolumes = setmetatable({}, { __mode = "k" })
+local muteCharConns = {}
+
+local function applyAudioMuteState(plr, isMuted)
+    if not plr or plr == LocalPlayer then return end
+
+    -- 1) Chat de voz moderno (AudioDeviceInput)
+    for _, inst in ipairs(plr:GetDescendants()) do
+        if inst:IsA("AudioDeviceInput") then
+            pcall(function() inst.Muted = isMuted end)
+        end
+    end
+    for _, inst in ipairs(Workspace:GetDescendants()) do
+        if inst:IsA("AudioDeviceInput") and inst.Player == plr then
+            pcall(function() inst.Muted = isMuted end)
+        end
+    end
+
+    -- 2) Chat de voz interno (VoiceChatInternal)
+    pcall(function()
+        local vci = game:GetService("VoiceChatInternal")
+        if vci and vci.SubscribePause then
+            vci:SubscribePause(plr.UserId, isMuted)
+        end
+    end)
+
+    -- 3) Sonidos de personaje / herramientas (boombox, audios locales)
+    local function handleSound(snd)
+        if snd:IsA("Sound") then
+            if isMuted then
+                if originalSoundVolumes[snd] == nil then
+                    originalSoundVolumes[snd] = snd.Volume
+                end
+                snd.Volume = 0
+            elseif originalSoundVolumes[snd] ~= nil then
+                snd.Volume = originalSoundVolumes[snd]
+                originalSoundVolumes[snd] = nil
+            end
+        end
+    end
+
+    if plr.Character then
+        for _, desc in ipairs(plr.Character:GetDescendants()) do
+            handleSound(desc)
+        end
+    end
+end
+
+local function updateMuteVisuals()
+    MuteAllBtn.BackgroundColor3 = muteAllActive and THEME.AccentRed or THEME.BgCard
+    MuteAllBtn.TextColor3 = muteAllActive and THEME.TextMain or THEME.TextMuted
+    MuteAllBtn.Text = muteAllActive and "🔊 Quitar Silencio a Todos" or "🔇 Silenciar a Todos"
+    muteAllStroke.Color = muteAllActive and THEME.AccentRed or THEME.Accent
+
+    for plr, data in pairs(playerCards) do
+        local isMuted = mutedPlayers[plr.UserId] == true
+        if data.MuteBtn then
+            data.MuteBtn.BackgroundColor3 = isMuted and THEME.AccentRed or THEME.SwitchOff
+            data.MuteBtn.Text = isMuted and "🔇" or "🔊"
+        end
+    end
+end
+
+local function setPlayerMuted(plr, isMuted)
+    if not plr or plr == LocalPlayer then return end
+    mutedPlayers[plr.UserId] = isMuted or nil
+
+    if muteCharConns[plr] then
+        muteCharConns[plr]:Disconnect()
+        muteCharConns[plr] = nil
+    end
+
+    if isMuted then
+        muteCharConns[plr] = plr.DescendantAdded:Connect(function(desc)
+            if mutedPlayers[plr.UserId] then
+                if desc:IsA("AudioDeviceInput") then
+                    pcall(function() desc.Muted = true end)
+                elseif desc:IsA("Sound") then
+                    if originalSoundVolumes[desc] == nil then
+                        originalSoundVolumes[desc] = desc.Volume
+                    end
+                    desc.Volume = 0
+                end
+            end
+        end)
+    end
+
+    applyAudioMuteState(plr, isMuted)
+    updateMuteVisuals()
+end
+
+HubMaid:GiveTask(Workspace.DescendantAdded:Connect(function(desc)
+    if hubUnloaded then return end
+    if desc:IsA("AudioDeviceInput") then
+        task.defer(function()
+            local owner = desc.Player
+            if owner and (mutedPlayers[owner.UserId] or muteAllActive) then
+                pcall(function() desc.Muted = true end)
+            end
+        end)
+    end
+end))
+
+MuteAllBtn.MouseButton1Click:Connect(function()
+    muteAllActive = not muteAllActive
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            setPlayerMuted(plr, muteAllActive)
+        end
+    end
+    updateMuteVisuals()
+end)
+
 local function updatePlayersSubTabVisuals()
     local isServer = (playersSubView == "Server")
     SubServerBtn.BackgroundColor3 = isServer and THEME.Accent or THEME.BgCard
@@ -1833,6 +1960,7 @@ local function updatePlayersSubTabVisuals()
     subFriendsStroke.Transparency = (not isServer) and 0.1 or 0.7
 
     SpectateBar.Visible = isServer
+    MuteAllBtn.Visible = isServer
     PlayerListContainer.Visible = isServer
     RefreshFriendsBtn.Visible = not isServer
     FriendsListContainer.Visible = not isServer
@@ -1848,6 +1976,7 @@ registerThemeCallback(function(t)
     subServerStroke.Color = t.Accent
     subFriendsStroke.Color = t.Accent
     updatePlayersSubTabVisuals()
+    updateMuteVisuals()
 
     RefreshFriendsBtn.BackgroundColor3 = t.BgCard
     RefreshFriendsBtn.TextColor3 = t.Accent
@@ -1972,7 +2101,6 @@ local function joinExperienceOrServer(btn, origLabel, placeId, gameId)
     activeTpOrigText = origLabel
     btn.Text = "⏳..."
 
-    -- Mismo juego (mismo PlaceId): TeleportService funciona nativamente
     if placeId == game.PlaceId then
         task.delay(4.5, function()
             if isHopping and activeTpBtn == btn then
@@ -2005,7 +2133,6 @@ local function joinExperienceOrServer(btn, origLabel, placeId, gameId)
         return
     end
 
-    -- Juego diferente (Cross-Universe): usar Deep Link nativo de Roblox (roblox://)
     local deepLink = (gameId and gameId ~= "")
         and string.format("roblox://experiences/start?placeId=%d&gameInstanceId=%s", placeId, gameId)
         or string.format("roblox://experiences/start?placeId=%d", placeId)
@@ -2320,7 +2447,7 @@ local function createPlayerRow(p)
 
     local nameLbl = Instance.new("TextLabel")
     Stealth.RandomizeName(nameLbl)
-    nameLbl.Size = UDim2.new(0.52, 0, 0, 14)
+    nameLbl.Size = UDim2.new(1, -122, 0, 14)
     nameLbl.Position = UDim2.new(0, 30, 0, 2)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Text = (isFriend and "⭐ " or "") .. p.DisplayName
@@ -2333,7 +2460,7 @@ local function createPlayerRow(p)
 
     local distLbl = Instance.new("TextLabel")
     Stealth.RandomizeName(distLbl)
-    distLbl.Size = UDim2.new(0.52, 0, 0, 11)
+    distLbl.Size = UDim2.new(1, -122, 0, 11)
     distLbl.Position = UDim2.new(0, 30, 0, 16)
     distLbl.BackgroundTransparency = 1
     distLbl.Text = "--- m"
@@ -2343,10 +2470,26 @@ local function createPlayerRow(p)
     distLbl.TextXAlignment = Enum.TextXAlignment.Left
     distLbl.Parent = row
 
+    local isMutedInit = (mutedPlayers[p.UserId] == true) or muteAllActive
+    local muteBtn = Instance.new("TextButton")
+    Stealth.RandomizeName(muteBtn)
+    muteBtn.Size = UDim2.new(0, 22, 0, 18)
+    muteBtn.Position = UDim2.new(1, -86, 0.5, -9)
+    muteBtn.BackgroundColor3 = isMutedInit and THEME.AccentRed or THEME.SwitchOff
+    muteBtn.Text = isMutedInit and "🔇" or "🔊"
+    muteBtn.TextColor3 = THEME.TextMain
+    muteBtn.Font = Enum.Font.GothamBold
+    muteBtn.TextSize = 8
+    muteBtn.Parent = row
+    Instance.new("UICorner", muteBtn).CornerRadius = UDim.new(0, 4)
+    muteBtn.MouseButton1Click:Connect(function()
+        setPlayerMuted(p, not (mutedPlayers[p.UserId] == true))
+    end)
+
     local tpBtn = Instance.new("TextButton")
     Stealth.RandomizeName(tpBtn)
     tpBtn.Size = UDim2.new(0, 26, 0, 18)
-    tpBtn.Position = UDim2.new(1, -62, 0.5, -9)
+    tpBtn.Position = UDim2.new(1, -61, 0.5, -9)
     tpBtn.BackgroundColor3 = THEME.Accent
     tpBtn.Text = "TP"
     tpBtn.TextColor3 = THEME.BgMain
@@ -2364,7 +2507,7 @@ local function createPlayerRow(p)
     local viewBtn = Instance.new("TextButton")
     Stealth.RandomizeName(viewBtn)
     viewBtn.Size = UDim2.new(0, 30, 0, 18)
-    viewBtn.Position = UDim2.new(1, -33, 0.5, -9)
+    viewBtn.Position = UDim2.new(1, -32, 0.5, -9)
     viewBtn.BackgroundColor3 = THEME.SwitchOff
     viewBtn.Text = "VIEW"
     viewBtn.TextColor3 = THEME.TextMain
@@ -2379,10 +2522,14 @@ local function createPlayerRow(p)
     playerCards[p] = {
         Row = row,
         DistLabel = distLbl,
+        MuteBtn = muteBtn,
         ViewBtn = viewBtn,
         Stroke = stroke,
         IsFriend = isFriend
     }
+    if isMutedInit then
+        setPlayerMuted(p, true)
+    end
     applyPlayerFilter()
 end
 
@@ -2464,6 +2611,7 @@ local function applyThemeByName(themeName)
         syncQuickBtnVisual(k, v)
     end
     updateSpectateVisuals()
+    updateMuteVisuals()
     saveStore()
 end
 
@@ -2632,10 +2780,18 @@ TabConfig:AddButton({
             Config.FPSBooster = true
             saveStore()
         end
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and mutedPlayers[plr.UserId] then
+                setPlayerMuted(plr, false)
+            end
+        end
         if spectatingPlayer then resetSpectate() end
         RestoreMap()
 
         for _, conn in pairs(espCharConnections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        for _, conn in pairs(muteCharConns) do
             pcall(function() conn:Disconnect() end)
         end
         HubMaid:DoCleaning()
@@ -2912,6 +3068,7 @@ end))
 HubMaid:GiveTask(Players.PlayerRemoving:Connect(function(plr)
     if spectatingPlayer == plr then resetSpectate() end
     if espCharConnections[plr] then espCharConnections[plr]:Disconnect(); espCharConnections[plr] = nil end
+    if muteCharConns[plr] then muteCharConns[plr]:Disconnect(); muteCharConns[plr] = nil end
     if espHighlights[plr] then espHighlights[plr]:Destroy(); espHighlights[plr] = nil end
     if playerCards[plr] then
         playerCards[plr].Row:Destroy()
