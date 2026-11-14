@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.4 - Safe Boot & Modular)
--- ESP Enemigos/Compañeros + Hitbox Expander + Waypoints + Mute + Join Friends + Server Hop
+-- HUB: xcs (Neon Glass v3.5 - Safe Boot & Modular)
+-- ESP Multi-Rig/Anti-Límite + Enemigos/Compañeros/Bots + Hitbox Expander + Waypoints + Mute + Friends
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -186,6 +186,9 @@ local function buildDefaultProfile()
         LockButtons = false,
         ESPEnemies = true,
         ESPTeammates = false,
+        ESPIgnoreTeams = false,
+        ESPNPCs = false,
+        ESPBodyMarker = true,
         ESPInfo = true,
         ESPName = true,
         ESPHealth = true,
@@ -344,8 +347,7 @@ local Modules = {
     thirdPersonConn = nil,
     transparentParts = {},
     deletedPartsMemory = {},
-    espHighlights = {},
-    espBillboards = {},
+    espEntries = {},
     espCharConns = {},
     freeCamConn = nil,
     freeCamRotateConn = nil,
@@ -790,14 +792,45 @@ do
         end
     end
 
-    -- Detección de Equipo (Enemigo vs Compañero)
+    -- ==========================================
+    -- 🎯 DETECCIÓN DE RIGS Y EQUIPOS (MULTI-JUEGO)
+    -- ==========================================
+    local DEFAULT_NEUTRAL_COLOR = BrickColor.new("Medium stone grey")
+
+    function Funcs.getPlayerRig(plr)
+        if not plr then return nil end
+        local char = plr.Character
+        if char and char.Parent and char:FindFirstChildWhichIsA("BasePart", true) then
+            return char
+        end
+        local candidateFolders = {
+            Services.Workspace:FindFirstChild("Characters"),
+            Services.Workspace:FindFirstChild("Players"),
+            Services.Workspace:FindFirstChild("Entities"),
+            Services.Workspace
+        }
+        for _, folder in ipairs(candidateFolders) do
+            if folder then
+                local m = folder:FindFirstChild(plr.Name)
+                if m and m:IsA("Model") and m:FindFirstChildWhichIsA("BasePart", true) then
+                    return m
+                end
+            end
+        end
+        return char
+    end
+
     function Funcs.isPlayerTeammate(plr)
         if not plr or plr == LocalPlayer then return false end
+        if Config.ESPIgnoreTeams == true then return false end
+
         if LocalPlayer.Team ~= nil and plr.Team ~= nil then
             return plr.Team == LocalPlayer.Team
         end
         if not LocalPlayer.Neutral and not plr.Neutral and LocalPlayer.TeamColor and plr.TeamColor then
-            return plr.TeamColor == LocalPlayer.TeamColor
+            if LocalPlayer.TeamColor ~= DEFAULT_NEUTRAL_COLOR or plr.TeamColor ~= DEFAULT_NEUTRAL_COLOR then
+                return plr.TeamColor == LocalPlayer.TeamColor
+            end
         end
         local myAttr = LocalPlayer:GetAttribute("Team") or (LocalPlayer.Character and LocalPlayer.Character:GetAttribute("Team"))
         local theirAttr = plr:GetAttribute("Team") or (plr.Character and plr.Character:GetAttribute("Team"))
@@ -809,6 +842,7 @@ do
 
     function Funcs.shouldTrackPlayerESP(plr)
         if not State.ESP or not plr or plr == LocalPlayer then return false end
+        if Config.ESPIgnoreTeams == true then return true end
         if Funcs.isPlayerTeammate(plr) then
             return Config.ESPTeammates == true
         else
@@ -816,12 +850,12 @@ do
         end
     end
 
-    -- Hitbox Expander (ignora compañeros si hay equipos)
+    -- Hitbox Expander
     function Funcs.applyHitboxToPlayer(plr)
         if not State.HitboxExpander or plr == LocalPlayer then return end
         if Funcs.isPlayerTeammate(plr) then return end
-        local char = plr.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local rig = Funcs.getPlayerRig(plr)
+        local hrp = rig and (rig:FindFirstChild("HumanoidRootPart") or rig:FindFirstChild("Torso") or rig:FindFirstChild("UpperTorso"))
         if not hrp or not hrp:IsA("BasePart") then return end
 
         if not Modules.originalHitboxProps[hrp] then
@@ -979,12 +1013,14 @@ do
     end
 
     -- ==========================================
-    -- 🎯 ESP MEJORADO (ENEMIGOS / COMPAÑEROS + ANTI-STREAMING)
+    -- 🎯 ESP UNIVERSAL (HIGHLIGHT + BODY MARKER + PILL + BOTS)
     -- ==========================================
     local ENEMY_FILL    = Color3.fromRGB(255, 0, 80)
     local ENEMY_OUTLINE = Color3.fromRGB(255, 255, 255)
     local TEAM_FILL     = Color3.fromRGB(0, 220, 120)
     local TEAM_OUTLINE  = Color3.fromRGB(210, 255, 235)
+    local NPC_FILL      = Color3.fromRGB(245, 165, 35)
+    local NPC_OUTLINE   = Color3.fromRGB(255, 240, 200)
 
     local function shouldShowESPBillboard()
         return State.ESP
@@ -1000,11 +1036,11 @@ do
         else return "#EB4155" end
     end
 
-    local function buildESPString(plr, hum, dist, isMate)
+    local function buildESPString(displayName, hum, dist, modeTag)
         local parts = {}
         if Config.ESPName ~= false then
-            local safeName = string.gsub(plr.DisplayName, "[<>&]", "")
-            local nameColor = isMate and "#64F5B4" or "#F0F5FF"
+            local safeName = string.gsub(tostring(displayName), "[<>&]", "")
+            local nameColor = (modeTag == "Team") and "#64F5B4" or ((modeTag == "NPC") and "#FFD166" or "#F0F5FF")
             table.insert(parts, string.format('<font color="%s">%s</font>', nameColor, safeName))
         end
         if Config.ESPHealth ~= false then
@@ -1018,66 +1054,92 @@ do
         return table.concat(parts, ' <font color="#5A6982">•</font> ')
     end
 
-    function Funcs.removePlayerESP(plr)
-        if Modules.espHighlights[plr] then
-            if Modules.espHighlights[plr].Parent then
-                Modules.espHighlights[plr]:Destroy()
-            end
-            Modules.espHighlights[plr] = nil
-        end
-        if Modules.espBillboards[plr] then
-            if Modules.espBillboards[plr].Gui and Modules.espBillboards[plr].Gui.Parent then
-                Modules.espBillboards[plr].Gui:Destroy()
-            end
-            Modules.espBillboards[plr] = nil
-        end
+    function Funcs.removeESPEntry(key)
+        local entry = Modules.espEntries[key]
+        if not entry then return end
+        if entry.Highlight and entry.Highlight.Parent then entry.Highlight:Destroy() end
+        if entry.InfoGui and entry.InfoGui.Parent then entry.InfoGui:Destroy() end
+        if entry.BodyGui and entry.BodyGui.Parent then entry.BodyGui:Destroy() end
+        Modules.espEntries[key] = nil
     end
 
-    local function getCharacterAdornee(char)
-        if not char then return nil end
-        return char:FindFirstChild("Head")
-            or char:FindFirstChild("HumanoidRootPart")
-            or char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("Torso")
-            or char.PrimaryPart
-            or char:FindFirstChildWhichIsA("BasePart")
+    local function getRigParts(rig)
+        if not rig then return nil, nil end
+        local torso = rig:FindFirstChild("UpperTorso")
+            or rig:FindFirstChild("Torso")
+            or rig:FindFirstChild("HumanoidRootPart")
+            or rig.PrimaryPart
+            or rig:FindFirstChildWhichIsA("BasePart", true)
+        local head = rig:FindFirstChild("Head") or torso
+        return head, torso
     end
 
-    function Funcs.applyESPToCharacter(plr, char)
-        if not Funcs.shouldTrackPlayerESP(plr) or not char or not char.Parent then
-            Funcs.removePlayerESP(plr)
+    function Funcs.applyESPToRig(key, displayName, rig, modeTag)
+        if not State.ESP or not rig or not rig.Parent then
+            Funcs.removeESPEntry(key)
             return
         end
 
-        Funcs.removePlayerESP(plr)
+        local headPart, torsoPart = getRigParts(rig)
+        if not torsoPart then
+            Funcs.removeESPEntry(key)
+            return
+        end
 
-        local isMate = Funcs.isPlayerTeammate(plr)
-        local fillCol = isMate and TEAM_FILL or ENEMY_FILL
-        local outCol  = isMate and TEAM_OUTLINE or ENEMY_OUTLINE
+        Funcs.removeESPEntry(key)
 
+        local fillCol = (modeTag == "Team") and TEAM_FILL or ((modeTag == "NPC") and NPC_FILL or ENEMY_FILL)
+        local outCol  = (modeTag == "Team") and TEAM_OUTLINE or ((modeTag == "NPC") and NPC_OUTLINE or ENEMY_OUTLINE)
+
+        -- 1) Highlight 3D
         local hl = Instance.new("Highlight")
         Stealth.RandomizeName(hl)
-        hl.Adornee = char
+        hl.Adornee = rig
         hl.FillColor = fillCol
         hl.OutlineColor = outCol
-        hl.FillTransparency = isMate and 0.65 or 0.5
+        hl.FillTransparency = (modeTag == "Team") and 0.65 or 0.5
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.Parent = UI.ScreenGui
-        Modules.espHighlights[plr] = hl
 
-        local adornee = getCharacterAdornee(char)
-        if not adornee then return end
+        -- 2) Marcador 2D en el cuerpo (Anti-límite de 31 Highlights)
+        local bodyGui = Instance.new("BillboardGui")
+        Stealth.RandomizeName(bodyGui)
+        bodyGui.Adornee = torsoPart
+        bodyGui.AlwaysOnTop = true
+        bodyGui.Size = UDim2.new(0, 14, 0, 14)
+        bodyGui.MaxDistance = 3500
+        bodyGui.Enabled = (Config.ESPBodyMarker ~= false)
+        bodyGui.Parent = UI.ScreenGui
 
-        local bb = Instance.new("BillboardGui")
-        Stealth.RandomizeName(bb)
-        bb.Adornee = adornee
-        bb.AlwaysOnTop = true
-        bb.Size = UDim2.new(0, 220, 0, 22)
-        bb.StudsOffset = (adornee.Name == "Head") and Vector3.new(0, 2.1, 0) or Vector3.new(0, 3.3, 0)
-        bb.MaxDistance = 3000
-        bb.Enabled = shouldShowESPBillboard()
-        bb.Parent = UI.ScreenGui
+        local boxFrame = Instance.new("Frame")
+        Stealth.RandomizeName(boxFrame)
+        boxFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+        boxFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+        boxFrame.Size = UDim2.new(0, 10, 0, 10)
+        boxFrame.BackgroundColor3 = fillCol
+        boxFrame.BackgroundTransparency = 0.45
+        boxFrame.BorderSizePixel = 0
+        boxFrame.Parent = bodyGui
+        Instance.new("UICorner", boxFrame).CornerRadius = UDim.new(0, 3)
+
+        local boxStroke = Instance.new("UIStroke")
+        Stealth.RandomizeName(boxStroke)
+        boxStroke.Color = outCol
+        boxStroke.Thickness = 1.2
+        boxStroke.Transparency = 0.1
+        boxStroke.Parent = boxFrame
+
+        -- 3) Etiqueta flotante (Nombre • Vida • Distancia)
+        local infoGui = Instance.new("BillboardGui")
+        Stealth.RandomizeName(infoGui)
+        infoGui.Adornee = headPart
+        infoGui.AlwaysOnTop = true
+        infoGui.Size = UDim2.new(0, 220, 0, 22)
+        infoGui.StudsOffset = (headPart.Name == "Head") and Vector3.new(0, 2.1, 0) or Vector3.new(0, 3.2, 0)
+        infoGui.MaxDistance = 3500
+        infoGui.Enabled = shouldShowESPBillboard()
+        infoGui.Parent = UI.ScreenGui
 
         local pill = Instance.new("Frame")
         Stealth.RandomizeName(pill)
@@ -1088,7 +1150,7 @@ do
         pill.BackgroundColor3 = Color3.fromRGB(13, 17, 26)
         pill.BackgroundTransparency = 0.35
         pill.BorderSizePixel = 0
-        pill.Parent = bb
+        pill.Parent = infoGui
         Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
 
         local pillStroke = Instance.new("UIStroke")
@@ -1115,86 +1177,138 @@ do
         lbl.TextStrokeTransparency = 0.65
         lbl.Parent = pill
 
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        local tHrp = char:FindFirstChild("HumanoidRootPart") or adornee
-        local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
-        lbl.Text = buildESPString(plr, hum, dist, isMate)
+        local hum = rig:FindFirstChildOfClass("Humanoid")
+        local myRig = Funcs.getPlayerRig(LocalPlayer)
+        local _, myTorso = getRigParts(myRig)
+        local dist = (myTorso and torsoPart) and math.floor((myTorso.Position - torsoPart.Position).Magnitude) or nil
+        lbl.Text = buildESPString(displayName, hum, dist, modeTag)
 
-        Modules.espBillboards[plr] = { Gui = bb, Label = lbl, Stroke = pillStroke }
+        Modules.espEntries[key] = {
+            Rig = rig,
+            Highlight = hl,
+            BodyGui = bodyGui,
+            BoxFrame = boxFrame,
+            BoxStroke = boxStroke,
+            InfoGui = infoGui,
+            Label = lbl,
+            Stroke = pillStroke,
+        }
+    end
+
+    local function scanNPCModels()
+        local npcs = {}
+        if Config.ESPNPCs ~= true then return npcs end
+
+        local playerRigs = {}
+        for _, plr in ipairs(Services.Players:GetPlayers()) do
+            local r = Funcs.getPlayerRig(plr)
+            if r then playerRigs[r] = true end
+        end
+
+        for _, obj in ipairs(Services.Workspace:GetDescendants()) do
+            if obj:IsA("Humanoid") and obj.Health > 0 then
+                local model = obj.Parent
+                if model and model:IsA("Model") and not playerRigs[model] then
+                    if not Services.Players:GetPlayerFromCharacter(model) then
+                        table.insert(npcs, model)
+                    end
+                end
+            end
+        end
+        return npcs
     end
 
     function Funcs.refreshESPBillboards()
         if not State.ESP then return end
-        local show = shouldShowESPBillboard()
-        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local showInfo = shouldShowESPBillboard()
+        local showBody = (Config.ESPBodyMarker ~= false)
+        local myRig = Funcs.getPlayerRig(LocalPlayer)
+        local _, myTorso = getRigParts(myRig)
 
+        local activeKeys = {}
+
+        -- 1) Jugadores reales
         for _, plr in ipairs(Services.Players:GetPlayers()) do
             if plr ~= LocalPlayer then
-                local char = plr.Character
-                local shouldTrack = Funcs.shouldTrackPlayerESP(plr) and char and char.Parent ~= nil
+                local rig = Funcs.getPlayerRig(plr)
+                local shouldTrack = Funcs.shouldTrackPlayerESP(plr) and rig and rig.Parent ~= nil
+                if shouldTrack then
+                    activeKeys[plr] = true
+                    local isMate = (Config.ESPIgnoreTeams ~= true) and Funcs.isPlayerTeammate(plr)
+                    local modeTag = isMate and "Team" or "Enemy"
+                    local entry = Modules.espEntries[plr]
+                    local headPart, torsoPart = getRigParts(rig)
 
-                if not shouldTrack then
-                    if Modules.espHighlights[plr] or Modules.espBillboards[plr] then
-                        Funcs.removePlayerESP(plr)
+                    if not torsoPart then
+                        Funcs.removeESPEntry(plr)
+                    elseif not entry or entry.Rig ~= rig
+                        or not entry.InfoGui or not entry.InfoGui.Parent or not entry.InfoGui.Adornee
+                        or not entry.BodyGui or not entry.BodyGui.Parent or not entry.BodyGui.Adornee then
+                        Funcs.applyESPToRig(plr, plr.DisplayName, rig, modeTag)
+                    else
+                        local fillCol = isMate and TEAM_FILL or ENEMY_FILL
+                        local outCol  = isMate and TEAM_OUTLINE or ENEMY_OUTLINE
+
+                        if entry.Highlight and entry.Highlight.Parent and entry.Highlight.FillColor ~= fillCol then
+                            entry.Highlight.FillColor = fillCol
+                            entry.Highlight.OutlineColor = outCol
+                            entry.Highlight.FillTransparency = isMate and 0.65 or 0.5
+                        end
+                        if entry.BodyGui and entry.BodyGui.Parent then
+                            entry.BodyGui.Enabled = showBody
+                            entry.BoxFrame.BackgroundColor3 = fillCol
+                            entry.BoxStroke.Color = outCol
+                        end
+                        if entry.InfoGui and entry.InfoGui.Parent then
+                            entry.InfoGui.Enabled = showInfo
+                            entry.Stroke.Color = fillCol
+                            if showInfo then
+                                local hum = rig:FindFirstChildOfClass("Humanoid")
+                                local dist = (myTorso and torsoPart) and math.floor((myTorso.Position - torsoPart.Position).Magnitude) or nil
+                                entry.Label.Text = buildESPString(plr.DisplayName, hum, dist, modeTag)
+                            end
+                        end
                     end
                 else
-                    local hl = Modules.espHighlights[plr]
-                    local bbData = Modules.espBillboards[plr]
-                    local currentAdornee = getCharacterAdornee(char)
+                    Funcs.removeESPEntry(plr)
+                end
+            end
+        end
 
-                    -- Si falta Highlight, se perdió Adornee o cargó tarde por Streaming, re-aplicar
-                    if not hl or not hl.Parent or hl.Adornee ~= char
-                        or (currentAdornee and (not bbData or not bbData.Gui or not bbData.Gui.Parent or not bbData.Gui.Adornee)) then
-                        Funcs.applyESPToCharacter(plr, char)
-                        hl = Modules.espHighlights[plr]
-                        bbData = Modules.espBillboards[plr]
-                    end
-
-                    local isMate = Funcs.isPlayerTeammate(plr)
-                    local fillCol = isMate and TEAM_FILL or ENEMY_FILL
-                    local outCol  = isMate and TEAM_OUTLINE or ENEMY_OUTLINE
-
-                    if hl and hl.Parent then
-                        if hl.FillColor ~= fillCol then
-                            hl.FillColor = fillCol
-                            hl.OutlineColor = outCol
-                            hl.FillTransparency = isMate and 0.65 or 0.5
-                        end
-                    end
-
-                    if bbData and bbData.Gui and bbData.Gui.Parent then
-                        bbData.Gui.Enabled = show
-                        if bbData.Stroke and bbData.Stroke.Color ~= fillCol then
-                            bbData.Stroke.Color = fillCol
-                        end
-                        if show then
-                            local hum = char:FindFirstChildOfClass("Humanoid")
-                            local tHrp = char:FindFirstChild("HumanoidRootPart") or currentAdornee
-                            local dist = (myHrp and tHrp) and math.floor((myHrp.Position - tHrp.Position).Magnitude) or nil
-                            bbData.Label.Text = buildESPString(plr, hum, dist, isMate)
-                        end
+        -- 2) NPCs / Bots opcionales
+        for _, npcModel in ipairs(scanNPCModels()) do
+            activeKeys[npcModel] = true
+            local entry = Modules.espEntries[npcModel]
+            local _, torsoPart = getRigParts(npcModel)
+            if torsoPart then
+                if not entry or not entry.InfoGui or not entry.InfoGui.Parent or not entry.InfoGui.Adornee then
+                    Funcs.applyESPToRig(npcModel, npcModel.Name, npcModel, "NPC")
+                else
+                    entry.BodyGui.Enabled = showBody
+                    entry.InfoGui.Enabled = showInfo
+                    if showInfo then
+                        local hum = npcModel:FindFirstChildOfClass("Humanoid")
+                        local dist = (myTorso and torsoPart) and math.floor((myTorso.Position - torsoPart.Position).Magnitude) or nil
+                        entry.Label.Text = buildESPString(npcModel.Name, hum, dist, "NPC")
                     end
                 end
+            end
+        end
+
+        -- Limpiar entradas obsoletas
+        for key in pairs(Modules.espEntries) do
+            if not activeKeys[key] then
+                Funcs.removeESPEntry(key)
             end
         end
     end
 
     function Funcs.refreshESPAll()
-        if not State.ESP then
-            for _, plr in ipairs(Services.Players:GetPlayers()) do
-                Funcs.removePlayerESP(plr)
-            end
-            return
+        for key in pairs(Modules.espEntries) do
+            Funcs.removeESPEntry(key)
         end
-        for _, plr in ipairs(Services.Players:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                if Funcs.shouldTrackPlayerESP(plr) and plr.Character then
-                    Funcs.applyESPToCharacter(plr, plr.Character)
-                else
-                    Funcs.removePlayerESP(plr)
-                end
-            end
+        if State.ESP then
+            Funcs.refreshESPBillboards()
         end
     end
 
@@ -1204,13 +1318,22 @@ do
         Modules.espCharConns[plr] = plr.CharacterAdded:Connect(function(char)
             Funcs.rebuildXRayFilter()
             task.wait(0.15)
-            if State.ESP then Funcs.applyESPToCharacter(plr, char) end
+            if State.ESP then
+                local isMate = (Config.ESPIgnoreTeams ~= true) and Funcs.isPlayerTeammate(plr)
+                if Funcs.shouldTrackPlayerESP(plr) then
+                    Funcs.applyESPToRig(plr, plr.DisplayName, char, isMate and "Team" or "Enemy")
+                end
+            end
             if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
         end)
-        if plr.Character then
-            if State.ESP then Funcs.applyESPToCharacter(plr, plr.Character) end
-            if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
+        if State.ESP and Funcs.shouldTrackPlayerESP(plr) then
+            local rig = Funcs.getPlayerRig(plr)
+            if rig then
+                local isMate = (Config.ESPIgnoreTeams ~= true) and Funcs.isPlayerTeammate(plr)
+                Funcs.applyESPToRig(plr, plr.DisplayName, rig, isMate and "Team" or "Enemy")
+            end
         end
+        if State.HitboxExpander then Funcs.applyHitboxToPlayer(plr) end
     end
 
     for _, plr in ipairs(Services.Players:GetPlayers()) do
@@ -1224,13 +1347,12 @@ do
             for _, plr in ipairs(Services.Players:GetPlayers()) do
                 Funcs.setupPlayerTracker(plr)
             end
-            Funcs.refreshESPAll()
+            Funcs.refreshESPBillboards()
         else
-            for _, plr in ipairs(Services.Players:GetPlayers()) do
-                Funcs.removePlayerESP(plr)
+            for key in pairs(Modules.espEntries) do
+                Funcs.removeESPEntry(key)
             end
-            table.clear(Modules.espHighlights)
-            table.clear(Modules.espBillboards)
+            table.clear(Modules.espEntries)
         end
     end
 
@@ -1580,7 +1702,7 @@ do
     local header = Instance.new("TextButton")
     Stealth.RandomizeName(header)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.4"
+    header.Text = "   ◈ xcs Hub  v3.5"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -2275,6 +2397,18 @@ do
         Icon = "🛡️", Title = "ESP: Marcar Compañeros", Default = Config.ESPTeammates == true,
         Callback = function(v) Config.ESPTeammates = v; saveStore(); Funcs.refreshESPAll() end
     })
+    Controls.espIgnoreTeamsToggle = TabVisuals:AddToggle({
+        Icon = "🌐", Title = "ESP: Ignorar Equipos (Todos)", Default = Config.ESPIgnoreTeams == true,
+        Callback = function(v) Config.ESPIgnoreTeams = v; saveStore(); Funcs.refreshESPAll() end
+    })
+    Controls.espNpcsToggle = TabVisuals:AddToggle({
+        Icon = "🤖", Title = "ESP: Incluir Bots / NPCs", Default = Config.ESPNPCs == true,
+        Callback = function(v) Config.ESPNPCs = v; saveStore(); Funcs.refreshESPAll() end
+    })
+    Controls.espBodyMarkerToggle = TabVisuals:AddToggle({
+        Icon = "📦", Title = "ESP: Marcador en Cuerpo", Default = Config.ESPBodyMarker ~= false,
+        Callback = function(v) Config.ESPBodyMarker = v; saveStore(); Funcs.refreshESPBillboards() end
+    })
     Controls.espInfoToggle = TabVisuals:AddToggle({
         Icon = "🏷️", Title = "ESP: Etiqueta Flotante", Default = Config.ESPInfo ~= false,
         Callback = function(v) Config.ESPInfo = v; saveStore(); Funcs.refreshESPBillboards() end
@@ -2617,7 +2751,8 @@ do
             return
         end
         Runtime.spectatingPlayer = targetPlayer
-        local hum = targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        local rig = Funcs.getPlayerRig(targetPlayer)
+        local hum = rig and rig:FindFirstChildOfClass("Humanoid")
         if hum then Camera.CameraSubject = hum end
         Funcs.updateSpectateVisuals()
     end
@@ -3106,8 +3241,9 @@ do
         tpBtn.Parent = row
         Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
         tpBtn.MouseButton1Click:Connect(function()
-            local tHrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-            if tHrp then Funcs.SafeTeleport(tHrp.CFrame + Vector3.new(0, 3.5, 0)) end
+            local rig = Funcs.getPlayerRig(p)
+            local _, torso = getRigParts(rig)
+            if torso then Funcs.SafeTeleport(torso.CFrame + Vector3.new(0, 3.5, 0)) end
         end)
 
         local viewBtn = Instance.new("TextButton")
@@ -3143,11 +3279,13 @@ do
     task.spawn(function()
         while not Runtime.hubUnloaded do
             if UI.MainFrame.Visible and Runtime.ActiveTabName == "Jug." and Runtime.playersSubView == "Server" then
-                local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local myRig = Funcs.getPlayerRig(LocalPlayer)
+                local _, myTorso = getRigParts(myRig)
                 for plr, data in pairs(Modules.playerCards) do
-                    local tHrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-                    if myHrp and tHrp then
-                        local dist = math.floor((myHrp.Position - tHrp.Position).Magnitude)
+                    local rig = Funcs.getPlayerRig(plr)
+                    local _, tTorso = getRigParts(rig)
+                    if myTorso and tTorso then
+                        local dist = math.floor((myTorso.Position - tTorso.Position).Magnitude)
                         data.DistLabel.Text = dist .. " m"
                         data.Row.LayoutOrder = (data.IsFriend and -100000 or 0) + dist
                     else
@@ -3264,6 +3402,9 @@ do
         Controls.lockButtonsToggle.Set(Config.LockButtons == true, true)
         Controls.espEnemiesToggle.Set(Config.ESPEnemies ~= false, true)
         Controls.espTeammatesToggle.Set(Config.ESPTeammates == true, true)
+        Controls.espIgnoreTeamsToggle.Set(Config.ESPIgnoreTeams == true, true)
+        Controls.espNpcsToggle.Set(Config.ESPNPCs == true, true)
+        Controls.espBodyMarkerToggle.Set(Config.ESPBodyMarker ~= false, true)
         Controls.espInfoToggle.Set(Config.ESPInfo ~= false, true)
         Controls.espNameToggle.Set(Config.ESPName ~= false, true)
         Controls.espHealthToggle.Set(Config.ESPHealth ~= false, true)
@@ -3642,7 +3783,7 @@ do
         if Runtime.spectatingPlayer == plr then Funcs.resetSpectate() end
         if Modules.espCharConns[plr] then Stealth.Disconnect(Modules.espCharConns[plr]); Modules.espCharConns[plr] = nil end
         if Modules.muteCharConns[plr] then Stealth.Disconnect(Modules.muteCharConns[plr]); Modules.muteCharConns[plr] = nil end
-        Funcs.removePlayerESP(plr)
+        Funcs.removeESPEntry(plr)
         if Modules.playerCards[plr] then
             Modules.playerCards[plr].Row:Destroy()
             Modules.playerCards[plr] = nil
