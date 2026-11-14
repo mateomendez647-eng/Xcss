@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.5 - Safe Boot & Modular)
--- ESP Multi-Rig/Anti-Límite + Menú Desplegable (<) + Hitbox Expander + Waypoints + Mute + Friends
+-- HUB: xcs (Neon Glass v3.6 - Ultra Stealth & Modular)
+-- Blindaje Total de Instancias + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -9,8 +9,9 @@ end
 task.wait(0.4)
 
 local env = (getgenv and getgenv()) or _G
-if type(env.__XCS_UNLOAD) == "function" then
-    pcall(env.__XCS_UNLOAD)
+local ENV_CLEANUP_KEY = "_xcs_rt_0x7f"
+if type(env[ENV_CLEANUP_KEY]) == "function" then
+    pcall(env[ENV_CLEANUP_KEY])
     task.wait(0.1)
 end
 
@@ -36,25 +37,61 @@ local Mouse = LocalPlayer:GetMouse()
 local isTouchDevice = Services.UserInputService.TouchEnabled and not Services.UserInputService.KeyboardEnabled
 
 -- ==========================================
--- 🛡️ MÓDULO DE SIGILO SEGURO (STEALTH)
+-- 🛡️ MÓDULO DE SIGILO Y ANTI-DETECCIÓN GLOBAL
 -- ==========================================
 local Stealth = { _seed = tick() % 1000 }
 
-local function stealthName()
+local STEALTH_PREFIXES = {
+    "UIContainer", "NodeMesh", "CacheBuffer", "RenderState",
+    "StreamSlot", "PixelMatrix", "LayoutGroup", "ViewPort", "AssetStream"
+}
+
+function Stealth.Name()
     Stealth._seed += 1
-    local prefixes = {"Frame", "TextLabel", "ImageLabel", "UICorner", "UIStroke", "ScrollingFrame", "TextButton", "ImageButton", "ViewportFrame"}
-    return prefixes[math.random(1, #prefixes)] .. "_" .. string.format("%04x", math.random(0, 0xFFFF))
+    return STEALTH_PREFIXES[math.random(1, #STEALTH_PREFIXES)] .. "_" .. string.format("%08x", math.random(0, 0xFFFFFFFF))
+end
+
+function Stealth.RandomizeName(instance)
+    if instance and typeof(instance) == "Instance" then
+        pcall(function() instance.Name = Stealth.Name() end)
+    end
+end
+
+-- Crea la instancia y asigna nombre aleatorio ANTES de asignarle Parent (evita ChildAdded triggers)
+function Stealth.New(className, parent)
+    local inst = Instance.new(className)
+    pcall(function() inst.Name = Stealth.Name() end)
+    if parent then
+        inst.Parent = parent
+    end
+    return inst
+end
+
+function Stealth.ProtectGui(gui)
+    if not gui then return end
+    Stealth.RandomizeName(gui)
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(gui)
+        elseif protectgui then
+            protectgui(gui)
+        end
+    end)
+    local ok = pcall(function()
+        if gethui then
+            gui.Parent = gethui()
+        else
+            gui.Parent = Services.CoreGui
+        end
+    end)
+    if not ok or not gui.Parent then
+        gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
 end
 
 function Stealth.Disconnect(connection)
     if connection then
         pcall(function() connection:Disconnect() end)
-    end
-end
-
-function Stealth.RandomizeName(instance)
-    if instance and typeof(instance) == "Instance" then
-        pcall(function() instance.Name = stealthName() end)
     end
 end
 
@@ -349,6 +386,8 @@ local Modules = {
     deletedPartsMemory = {},
     espEntries = {},
     espCharConns = {},
+    npcCache = setmetatable({}, { __mode = "k" }),
+    npcScanInitialized = false,
     freeCamConn = nil,
     freeCamRotateConn = nil,
     camYaw = 0,
@@ -384,7 +423,7 @@ local Controls = { keybindRefreshers = {} }
 local function unloadHub()
     if Runtime.hubUnloaded then return end
     Runtime.hubUnloaded = true
-    env.__XCS_UNLOAD = nil
+    env[ENV_CLEANUP_KEY] = nil
 
     if State.Invisicam and Funcs.toggleInvisicam then Funcs.toggleInvisicam(false) end
     if State.FPXRay and Funcs.toggleFPXRay then Funcs.toggleFPXRay(false) end
@@ -419,37 +458,45 @@ local function unloadHub()
     for _, conn in pairs(Modules.espCharConns) do Stealth.Disconnect(conn) end
     for _, conn in pairs(Modules.muteCharConns) do Stealth.Disconnect(conn) end
     HubMaid:DoCleaning()
+
+    -- Limpieza estricta de tablas para el Garbage Collector
+    table.clear(Modules.espCharConns)
+    table.clear(Modules.muteCharConns)
+    table.clear(Modules.espEntries)
+    table.clear(Modules.playerCards)
+    table.clear(Modules.friendCards)
+    table.clear(Modules.cachedCharParts)
+    table.clear(Modules.transparentParts)
+    table.clear(Modules.deletedPartsMemory)
+    table.clear(QuickButtons)
+    table.clear(QuickButtonStrokes)
+    table.clear(ToggleUpdaters)
+    table.clear(ThemeCallbacks)
 end
 
-env.__XCS_UNLOAD = unloadHub
+env[ENV_CLEANUP_KEY] = unloadHub
 
 -- ==========================================
--- 🖼️ PASO 1 DE CARGA: SCREENGUI Y BOTÓN FLOTANTE
+-- 🖼️ PASO 1 DE CARGA: SCREENGUI PROTEGIDA Y BOTÓN FLOTANTE
 -- ==========================================
 do
-    local sg = Instance.new("ScreenGui")
-    Stealth.RandomizeName(sg)
+    local sg = Stealth.New("ScreenGui")
     sg.ResetOnSpawn = false
     sg.IgnoreGuiInset = true
-    if not pcall(function() sg.Parent = Services.CoreGui end) then
-        sg.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    end
+    Stealth.ProtectGui(sg)
     HubMaid:GiveTask(sg)
     UI.ScreenGui = sg
 
     function UI.applyNeonStroke(parent, color, transparency, thickness)
-        local stroke = Instance.new("UIStroke")
-        Stealth.RandomizeName(stroke)
+        local stroke = Stealth.New("UIStroke", parent)
         stroke.Color = color or THEME.Accent
         stroke.Transparency = transparency or 0.45
         stroke.Thickness = thickness or 1
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Parent = parent
         return stroke
     end
 
-    local mini = Instance.new("TextButton")
-    Stealth.RandomizeName(mini)
+    local mini = Stealth.New("TextButton", sg)
     mini.Size = UDim2.new(0, 44, 0, 44)
     mini.Position = getSavedUDim2("MiniBtn")
     mini.BackgroundColor3 = THEME.BgMain
@@ -459,8 +506,7 @@ do
     mini.TextSize = 13
     mini.Font = Enum.Font.GothamBold
     mini.Visible = true
-    mini.Parent = sg
-    Instance.new("UICorner", mini).CornerRadius = UDim.new(1, 0)
+    Stealth.New("UICorner", mini).CornerRadius = UDim.new(1, 0)
     local miniSt = UI.applyNeonStroke(mini, THEME.AccentAmber, 0.2, 1.5)
 
     UI.MiniBtn = mini
@@ -749,6 +795,7 @@ do
         Modules.xrayRayParams.FilterDescendantsInstances = Modules.xrayFilterList
     end
 
+    -- 🚀 Teleport Anti-Rubberband sincronizado con Heartbeat
     function Funcs.SafeTeleport(targetCFrame)
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -759,9 +806,10 @@ do
         char:PivotTo(targetCFrame)
 
         task.spawn(function()
-            task.wait()
+            Services.RunService.Heartbeat:Wait()
             if char and char:FindFirstChild("HumanoidRootPart") then
                 char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                char.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
                 char:PivotTo(targetCFrame)
             end
         end)
@@ -850,7 +898,7 @@ do
         end
     end
 
-    -- Hitbox Expander
+    -- Hitbox Expander con Massless y restauración limpia
     function Funcs.applyHitboxToPlayer(plr)
         if not State.HitboxExpander or plr == LocalPlayer then return end
         if Funcs.isPlayerTeammate(plr) then return end
@@ -865,6 +913,7 @@ do
                 Material = hrp.Material,
                 Color = hrp.Color,
                 CanCollide = hrp.CanCollide,
+                Massless = hrp.Massless,
             }
         end
 
@@ -877,6 +926,7 @@ do
         if hrp.Material ~= Enum.Material.Neon then hrp.Material = Enum.Material.Neon end
         if hrp.Color ~= THEME.Accent then hrp.Color = THEME.Accent end
         if hrp.CanCollide then hrp.CanCollide = false end
+        if not hrp.Massless then hrp.Massless = true end
     end
 
     function Funcs.refreshAllHitboxes()
@@ -897,6 +947,7 @@ do
                     hrp.Material = orig.Material
                     hrp.Color = orig.Color
                     hrp.CanCollide = orig.CanCollide
+                    hrp.Massless = orig.Massless
                 end)
             end
         end
@@ -1013,7 +1064,7 @@ do
     end
 
     -- ==========================================
-    -- 🎯 ESP UNIVERSAL (HIGHLIGHT + BODY MARKER + PILL + BOTS)
+    -- 🎯 ESP UNIVERSAL (CONTENEDOR PROTEGIDO + CACHÉ DE NPCs)
     -- ==========================================
     local ENEMY_FILL    = Color3.fromRGB(255, 0, 80)
     local ENEMY_OUTLINE = Color3.fromRGB(255, 255, 255)
@@ -1091,58 +1142,47 @@ do
         local fillCol = (modeTag == "Team") and TEAM_FILL or ((modeTag == "NPC") and NPC_FILL or ENEMY_FILL)
         local outCol  = (modeTag == "Team") and TEAM_OUTLINE or ((modeTag == "NPC") and NPC_OUTLINE or ENEMY_OUTLINE)
 
-        -- 1) Highlight 3D
-        local hl = Instance.new("Highlight")
-        Stealth.RandomizeName(hl)
+        -- 1) Highlight 3D (parentado en UI.ScreenGui protegida)
+        local hl = Stealth.New("Highlight", UI.ScreenGui)
         hl.Adornee = rig
         hl.FillColor = fillCol
         hl.OutlineColor = outCol
         hl.FillTransparency = (modeTag == "Team") and 0.65 or 0.5
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Parent = UI.ScreenGui
 
-        -- 2) Marcador 2D en el cuerpo (Anti-límite de 31 Highlights)
-        local bodyGui = Instance.new("BillboardGui")
-        Stealth.RandomizeName(bodyGui)
+        -- 2) Marcador 2D en el cuerpo
+        local bodyGui = Stealth.New("BillboardGui", UI.ScreenGui)
         bodyGui.Adornee = torsoPart
         bodyGui.AlwaysOnTop = true
         bodyGui.Size = UDim2.new(0, 14, 0, 14)
         bodyGui.MaxDistance = 3500
         bodyGui.Enabled = (Config.ESPBodyMarker ~= false)
-        bodyGui.Parent = UI.ScreenGui
 
-        local boxFrame = Instance.new("Frame")
-        Stealth.RandomizeName(boxFrame)
+        local boxFrame = Stealth.New("Frame", bodyGui)
         boxFrame.AnchorPoint = Vector2.new(0.5, 0.5)
         boxFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
         boxFrame.Size = UDim2.new(0, 10, 0, 10)
         boxFrame.BackgroundColor3 = fillCol
         boxFrame.BackgroundTransparency = 0.45
         boxFrame.BorderSizePixel = 0
-        boxFrame.Parent = bodyGui
-        Instance.new("UICorner", boxFrame).CornerRadius = UDim.new(0, 3)
+        Stealth.New("UICorner", boxFrame).CornerRadius = UDim.new(0, 3)
 
-        local boxStroke = Instance.new("UIStroke")
-        Stealth.RandomizeName(boxStroke)
+        local boxStroke = Stealth.New("UIStroke", boxFrame)
         boxStroke.Color = outCol
         boxStroke.Thickness = 1.2
         boxStroke.Transparency = 0.1
-        boxStroke.Parent = boxFrame
 
         -- 3) Etiqueta flotante (Nombre • Vida • Distancia)
-        local infoGui = Instance.new("BillboardGui")
-        Stealth.RandomizeName(infoGui)
+        local infoGui = Stealth.New("BillboardGui", UI.ScreenGui)
         infoGui.Adornee = headPart
         infoGui.AlwaysOnTop = true
         infoGui.Size = UDim2.new(0, 220, 0, 22)
         infoGui.StudsOffset = (headPart.Name == "Head") and Vector3.new(0, 2.1, 0) or Vector3.new(0, 3.2, 0)
         infoGui.MaxDistance = 3500
         infoGui.Enabled = shouldShowESPBillboard()
-        infoGui.Parent = UI.ScreenGui
 
-        local pill = Instance.new("Frame")
-        Stealth.RandomizeName(pill)
+        local pill = Stealth.New("Frame", infoGui)
         pill.AnchorPoint = Vector2.new(0.5, 0.5)
         pill.Position = UDim2.new(0.5, 0, 0.5, 0)
         pill.Size = UDim2.new(0, 0, 0, 18)
@@ -1150,23 +1190,18 @@ do
         pill.BackgroundColor3 = Color3.fromRGB(13, 17, 26)
         pill.BackgroundTransparency = 0.35
         pill.BorderSizePixel = 0
-        pill.Parent = infoGui
-        Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+        Stealth.New("UICorner", pill).CornerRadius = UDim.new(1, 0)
 
-        local pillStroke = Instance.new("UIStroke")
-        Stealth.RandomizeName(pillStroke)
+        local pillStroke = Stealth.New("UIStroke", pill)
         pillStroke.Color = fillCol
         pillStroke.Transparency = 0.45
         pillStroke.Thickness = 1
-        pillStroke.Parent = pill
 
-        local pad = Instance.new("UIPadding")
+        local pad = Stealth.New("UIPadding", pill)
         pad.PaddingLeft = UDim.new(0, 7)
         pad.PaddingRight = UDim.new(0, 7)
-        pad.Parent = pill
 
-        local lbl = Instance.new("TextLabel")
-        Stealth.RandomizeName(lbl)
+        local lbl = Stealth.New("TextLabel", pill)
         lbl.Size = UDim2.new(0, 0, 1, 0)
         lbl.AutomaticSize = Enum.AutomaticSize.X
         lbl.BackgroundTransparency = 1
@@ -1175,7 +1210,6 @@ do
         lbl.TextSize = 10
         lbl.TextColor3 = Color3.fromRGB(240, 245, 255)
         lbl.TextStrokeTransparency = 0.65
-        lbl.Parent = pill
 
         local hum = rig:FindFirstChildOfClass("Humanoid")
         local myRig = Funcs.getPlayerRig(LocalPlayer)
@@ -1195,9 +1229,38 @@ do
         }
     end
 
-    local function scanNPCModels()
+    -- Caché eficiente de NPCs mediante eventos en lugar de GetDescendants() continuo
+    local function ensureNPCCache()
+        if Modules.npcScanInitialized then return end
+        Modules.npcScanInitialized = true
+
+        local function tryRegisterNPC(obj)
+            if obj:IsA("Humanoid") then
+                local model = obj.Parent
+                if model and model:IsA("Model") and not Services.Players:GetPlayerFromCharacter(model) then
+                    Modules.npcCache[model] = obj
+                end
+            end
+        end
+
+        for _, obj in ipairs(Services.Workspace:GetDescendants()) do
+            tryRegisterNPC(obj)
+        end
+
+        HubMaid:GiveTask(Services.Workspace.DescendantAdded:Connect(tryRegisterNPC))
+        HubMaid:GiveTask(Services.Workspace.DescendantRemoving:Connect(function(obj)
+            if Modules.npcCache[obj] then
+                Modules.npcCache[obj] = nil
+            elseif obj:IsA("Humanoid") and obj.Parent and Modules.npcCache[obj.Parent] then
+                Modules.npcCache[obj.Parent] = nil
+            end
+        end))
+    end
+
+    local function getCachedNPCModels()
         local npcs = {}
         if Config.ESPNPCs ~= true then return npcs end
+        ensureNPCCache()
 
         local playerRigs = {}
         for _, plr in ipairs(Services.Players:GetPlayers()) do
@@ -1205,14 +1268,9 @@ do
             if r then playerRigs[r] = true end
         end
 
-        for _, obj in ipairs(Services.Workspace:GetDescendants()) do
-            if obj:IsA("Humanoid") and obj.Health > 0 then
-                local model = obj.Parent
-                if model and model:IsA("Model") and not playerRigs[model] then
-                    if not Services.Players:GetPlayerFromCharacter(model) then
-                        table.insert(npcs, model)
-                    end
-                end
+        for model, hum in pairs(Modules.npcCache) do
+            if model and model.Parent and hum and hum.Parent and hum.Health > 0 and not playerRigs[model] then
+                table.insert(npcs, model)
             end
         end
         return npcs
@@ -1237,7 +1295,7 @@ do
                     local isMate = (Config.ESPIgnoreTeams ~= true) and Funcs.isPlayerTeammate(plr)
                     local modeTag = isMate and "Team" or "Enemy"
                     local entry = Modules.espEntries[plr]
-                    local headPart, torsoPart = getRigParts(rig)
+                    local _, torsoPart = getRigParts(rig)
 
                     if not torsoPart then
                         Funcs.removeESPEntry(plr)
@@ -1275,8 +1333,8 @@ do
             end
         end
 
-        -- 2) NPCs / Bots opcionales
-        for _, npcModel in ipairs(scanNPCModels()) do
+        -- 2) NPCs / Bots opcionales (desde caché)
+        for _, npcModel in ipairs(getCachedNPCModels()) do
             activeKeys[npcModel] = true
             local entry = Modules.espEntries[npcModel]
             local _, torsoPart = getRigParts(npcModel)
@@ -1295,7 +1353,6 @@ do
             end
         end
 
-        -- Limpiar entradas obsoletas
         for key in pairs(Modules.espEntries) do
             if not activeKeys[key] then
                 Funcs.removeESPEntry(key)
@@ -1531,7 +1588,7 @@ do
         end
     end
 
-    -- Fly & FreeCam
+    -- Fly & FreeCam (instancias creadas con Stealth.New antes de parentar al HRP)
     local function getMoveDirection()
         local c = LocalPlayer.Character
         local hum = c and c:FindFirstChildOfClass("Humanoid")
@@ -1547,6 +1604,11 @@ do
         if Modules.flyAlignOri then Modules.flyAlignOri:Destroy(); Modules.flyAlignOri = nil end
         if Modules.flyAttachment then Modules.flyAttachment:Destroy(); Modules.flyAttachment = nil end
         local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if hum then hum.PlatformStand = false end
     end
@@ -1565,13 +1627,11 @@ do
 
             if hum then hum.PlatformStand = true end
 
-            local att = Instance.new("Attachment")
-            Stealth.RandomizeName(att)
+            local att = Stealth.New("Attachment")
             att.Parent = hrp
             Modules.flyAttachment = att
 
-            local lv = Instance.new("LinearVelocity")
-            Stealth.RandomizeName(lv)
+            local lv = Stealth.New("LinearVelocity")
             lv.Attachment0 = att
             lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
             lv.MaxForce = math.huge
@@ -1579,8 +1639,7 @@ do
             lv.Parent = hrp
             Modules.flyLinearVel = lv
 
-            local ao = Instance.new("AlignOrientation")
-            Stealth.RandomizeName(ao)
+            local ao = Stealth.New("AlignOrientation")
             ao.Attachment0 = att
             ao.Mode = Enum.OrientationAlignmentMode.OneAttachment
             ao.RigidityEnabled = true
@@ -1685,49 +1744,40 @@ end
 -- 🖼️ PASO 2 DE CARGA: VENTANA Y LIBRERÍA DE COMPONENTES
 -- ==========================================
 do
-    local mainFrame = Instance.new("Frame")
-    Stealth.RandomizeName(mainFrame)
+    local mainFrame = Stealth.New("Frame", UI.ScreenGui)
     mainFrame.Size = UDim2.new(0, 275, 0, 355)
     mainFrame.Position = getSavedUDim2("MainFrame")
     mainFrame.BorderSizePixel = 0
     mainFrame.Visible = false
-    mainFrame.Parent = UI.ScreenGui
-    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+    Stealth.New("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
     local mainSt = UI.applyNeonStroke(mainFrame, THEME.Accent, 0.35, 1.3)
 
-    local scaler = Instance.new("UIScale")
+    local scaler = Stealth.New("UIScale", mainFrame)
     scaler.Scale = Config.UiScale
-    scaler.Parent = mainFrame
 
-    local header = Instance.new("TextButton")
-    Stealth.RandomizeName(header)
+    local header = Stealth.New("TextButton", mainFrame)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.5"
+    header.Text = "   ◈ xcs Hub  v3.6"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
     header.AutoButtonColor = false
-    header.Parent = mainFrame
-    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
+    Stealth.New("UICorner", header).CornerRadius = UDim.new(0, 12)
 
-    local headerLine = Instance.new("Frame")
-    Stealth.RandomizeName(headerLine)
+    local headerLine = Stealth.New("Frame", header)
     headerLine.Size = UDim2.new(1, 0, 0, 1)
     headerLine.Position = UDim2.new(0, 0, 1, -1)
     headerLine.BorderSizePixel = 0
-    headerLine.Parent = header
 
     local function createHeaderIcon(text, offsetX, customColor)
-        local btn = Instance.new("TextButton")
-        Stealth.RandomizeName(btn)
+        local btn = Stealth.New("TextButton", header)
         btn.Size = UDim2.new(0, 22, 0, 22)
         btn.Position = UDim2.new(1, offsetX, 0.5, -11)
         btn.BackgroundTransparency = 0.2
         btn.Text = text
         btn.Font = Enum.Font.GothamBold
         btn.TextSize = 10
-        btn.Parent = header
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+        Stealth.New("UICorner", btn).CornerRadius = UDim.new(0, 6)
         local st = UI.applyNeonStroke(btn, customColor or THEME.Accent, 0.4, 1)
         return btn, st
     end
@@ -1735,25 +1785,20 @@ do
     local masterBtn, masterSt = createHeaderIcon("👁️", -54)
     local minBtn, minSt       = createHeaderIcon("✕",  -28, THEME.AccentRed)
 
-    local tabBar = Instance.new("Frame")
-    Stealth.RandomizeName(tabBar)
+    local tabBar = Stealth.New("Frame", mainFrame)
     tabBar.Size = UDim2.new(1, -16, 0, 26)
     tabBar.Position = UDim2.new(0, 8, 0, 38)
     tabBar.BackgroundTransparency = 1
-    tabBar.Parent = mainFrame
 
-    local tabLayout = Instance.new("UIListLayout")
+    local tabLayout = Stealth.New("UIListLayout", tabBar)
     tabLayout.FillDirection = Enum.FillDirection.Horizontal
     tabLayout.Padding = UDim.new(0, 4)
     tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    tabLayout.Parent = tabBar
 
-    local pagesFolder = Instance.new("Frame")
-    Stealth.RandomizeName(pagesFolder)
+    local pagesFolder = Stealth.New("Frame", mainFrame)
     pagesFolder.Size = UDim2.new(1, 0, 1, -70)
     pagesFolder.Position = UDim2.new(0, 0, 0, 70)
     pagesFolder.BackgroundTransparency = 1
-    pagesFolder.Parent = mainFrame
 
     UI.MainFrame = mainFrame
     UI.mainStroke = mainSt
@@ -1801,19 +1846,16 @@ do
     end
 
     function UI.CreateTab(name, icon)
-        local tabBtn = Instance.new("TextButton")
-        Stealth.RandomizeName(tabBtn)
+        local tabBtn = Stealth.New("TextButton", tabBar)
         tabBtn.Size = UDim2.new(0.25, -3, 1, 0)
         tabBtn.Text = icon .. " " .. name
         tabBtn.Font = Enum.Font.GothamBold
         tabBtn.TextSize = 9
         tabBtn.AutoButtonColor = false
-        tabBtn.Parent = tabBar
-        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 7)
+        Stealth.New("UICorner", tabBtn).CornerRadius = UDim.new(0, 7)
         local tabStroke = UI.applyNeonStroke(tabBtn, THEME.Accent, 0.75, 1)
 
-        local page = Instance.new("ScrollingFrame")
-        Stealth.RandomizeName(page)
+        local page = Stealth.New("ScrollingFrame", pagesFolder)
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.BorderSizePixel = 0
@@ -1821,19 +1863,16 @@ do
         page.CanvasSize = UDim2.new(0, 0, 0, 0)
         page.AutomaticCanvasSize = Enum.AutomaticSize.Y
         page.Visible = false
-        page.Parent = pagesFolder
 
-        local list = Instance.new("UIListLayout")
+        local list = Stealth.New("UIListLayout", page)
         list.Padding = UDim.new(0, 5)
         list.SortOrder = Enum.SortOrder.LayoutOrder
-        list.Parent = page
 
-        local pad = Instance.new("UIPadding")
+        local pad = Stealth.New("UIPadding", page)
         pad.PaddingTop = UDim.new(0, 2)
         pad.PaddingBottom = UDim.new(0, 10)
         pad.PaddingLeft = UDim.new(0, 8)
         pad.PaddingRight = UDim.new(0, 8)
-        pad.Parent = page
 
         local TabObj = { Page = page, Button = tabBtn, Stroke = tabStroke }
         UI.Tabs[name] = TabObj
@@ -1855,31 +1894,26 @@ do
         end)
 
         function TabObj:AddSection(titleText)
-            local lbl = Instance.new("TextLabel")
-            Stealth.RandomizeName(lbl)
+            local lbl = Stealth.New("TextLabel", page)
             lbl.Size = UDim2.new(1, 0, 0, 18)
             lbl.BackgroundTransparency = 1
             lbl.Text = "  " .. string.upper(titleText)
             lbl.Font = Enum.Font.GothamBold
             lbl.TextSize = 8
             lbl.TextXAlignment = Enum.TextXAlignment.Left
-            lbl.Parent = page
             registerThemeCallback(function(t) lbl.TextColor3 = t.Accent end)
             return lbl
         end
 
         function TabObj:AddToggle(opts)
-            local card = Instance.new("Frame")
-            Stealth.RandomizeName(card)
+            local card = Stealth.New("Frame", opts.Parent or page)
             card.Size = UDim2.new(1, 0, 0, 28)
             card.BackgroundTransparency = 0.25
             card.BorderSizePixel = 0
-            card.Parent = opts.Parent or page
-            Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
+            Stealth.New("UICorner", card).CornerRadius = UDim.new(0, 8)
             local stroke = UI.applyNeonStroke(card, THEME.Accent, 0.78, 1)
 
-            local label = Instance.new("TextLabel")
-            Stealth.RandomizeName(label)
+            local label = Stealth.New("TextLabel", card)
             label.Size = UDim2.new(1, -52, 1, 0)
             label.Position = UDim2.new(0, 9, 0, 0)
             label.BackgroundTransparency = 1
@@ -1888,24 +1922,19 @@ do
             label.TextSize = 10
             label.TextTruncate = Enum.TextTruncate.AtEnd
             label.TextXAlignment = Enum.TextXAlignment.Left
-            label.Parent = card
 
-            local bg = Instance.new("TextButton")
-            Stealth.RandomizeName(bg)
+            local bg = Stealth.New("TextButton", card)
             bg.Size = UDim2.new(0, 32, 0, 16)
             bg.Position = UDim2.new(1, -40, 0.5, -8)
             bg.Text = ""
             bg.AutoButtonColor = false
-            bg.Parent = card
-            Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
+            Stealth.New("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
-            local knob = Instance.new("Frame")
-            Stealth.RandomizeName(knob)
+            local knob = Stealth.New("Frame", bg)
             knob.Size = UDim2.new(0, 12, 0, 12)
             knob.Position = UDim2.new(0, 2, 0.5, -6)
             knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            knob.Parent = bg
-            Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+            Stealth.New("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
             local current = opts.Default or false
 
@@ -1954,8 +1983,7 @@ do
 
             mainToggle.Label.Size = UDim2.new(1, -80, 1, 0)
 
-            local arrowBtn = Instance.new("TextButton")
-            Stealth.RandomizeName(arrowBtn)
+            local arrowBtn = Stealth.New("TextButton", card)
             arrowBtn.Size = UDim2.new(0, 22, 0, 20)
             arrowBtn.Position = UDim2.new(1, -68, 0.5, -10)
             arrowBtn.BackgroundTransparency = 0.25
@@ -1963,35 +1991,29 @@ do
             arrowBtn.Font = Enum.Font.GothamBold
             arrowBtn.TextSize = 11
             arrowBtn.AutoButtonColor = false
-            arrowBtn.Parent = card
-            Instance.new("UICorner", arrowBtn).CornerRadius = UDim.new(0, 5)
+            Stealth.New("UICorner", arrowBtn).CornerRadius = UDim.new(0, 5)
             local arrowStroke = UI.applyNeonStroke(arrowBtn, THEME.Accent, 0.55, 1)
 
-            local boxFrame = Instance.new("Frame")
-            Stealth.RandomizeName(boxFrame)
+            local boxFrame = Stealth.New("Frame", page)
             boxFrame.Size = UDim2.new(1, 0, 0, 0)
             boxFrame.AutomaticSize = Enum.AutomaticSize.Y
             boxFrame.BackgroundTransparency = 0.18
             boxFrame.BorderSizePixel = 0
             boxFrame.Visible = false
-            boxFrame.Parent = page
-            Instance.new("UICorner", boxFrame).CornerRadius = UDim.new(0, 9)
+            Stealth.New("UICorner", boxFrame).CornerRadius = UDim.new(0, 9)
             local boxStroke = UI.applyNeonStroke(boxFrame, THEME.Accent, 0.25, 1.3)
 
-            local boxPad = Instance.new("UIPadding")
+            local boxPad = Stealth.New("UIPadding", boxFrame)
             boxPad.PaddingTop = UDim.new(0, 6)
             boxPad.PaddingBottom = UDim.new(0, 6)
             boxPad.PaddingLeft = UDim.new(0, 6)
             boxPad.PaddingRight = UDim.new(0, 6)
-            boxPad.Parent = boxFrame
 
-            local boxLayout = Instance.new("UIListLayout")
+            local boxLayout = Stealth.New("UIListLayout", boxFrame)
             boxLayout.Padding = UDim.new(0, 4)
             boxLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            boxLayout.Parent = boxFrame
 
-            local footerBtn = Instance.new("TextButton")
-            Stealth.RandomizeName(footerBtn)
+            local footerBtn = Stealth.New("TextButton", boxFrame)
             footerBtn.Size = UDim2.new(1, 0, 0, 18)
             footerBtn.LayoutOrder = 999
             footerBtn.BackgroundTransparency = 0.35
@@ -1999,8 +2021,7 @@ do
             footerBtn.Font = Enum.Font.GothamBold
             footerBtn.TextSize = 8
             footerBtn.AutoButtonColor = false
-            footerBtn.Parent = boxFrame
-            Instance.new("UICorner", footerBtn).CornerRadius = UDim.new(0, 5)
+            Stealth.New("UICorner", footerBtn).CornerRadius = UDim.new(0, 5)
             local footerStroke = UI.applyNeonStroke(footerBtn, THEME.Accent, 0.65, 1)
 
             local isExpanded = false
@@ -2042,13 +2063,11 @@ do
         end
 
         function TabObj:AddSlider(opts)
-            local card = Instance.new("Frame")
-            Stealth.RandomizeName(card)
+            local card = Stealth.New("Frame", page)
             card.Size = UDim2.new(1, 0, 0, 38)
             card.BackgroundTransparency = 0.25
             card.BorderSizePixel = 0
-            card.Parent = page
-            Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
+            Stealth.New("UICorner", card).CornerRadius = UDim.new(0, 8)
             local stroke = UI.applyNeonStroke(card, THEME.Accent, 0.78, 1)
 
             local minVal, maxVal = opts.Min, opts.Max
@@ -2062,8 +2081,7 @@ do
                 return tostring(math.floor(v)) .. (opts.Suffix or "")
             end
 
-            local label = Instance.new("TextLabel")
-            Stealth.RandomizeName(label)
+            local label = Stealth.New("TextLabel", card)
             label.Size = UDim2.new(1, -18, 0, 14)
             label.Position = UDim2.new(0, 9, 0, 4)
             label.BackgroundTransparency = 1
@@ -2071,22 +2089,17 @@ do
             label.Font = Enum.Font.GothamMedium
             label.TextSize = 9
             label.TextXAlignment = Enum.TextXAlignment.Left
-            label.Parent = card
 
-            local barBg = Instance.new("TextButton")
-            Stealth.RandomizeName(barBg)
+            local barBg = Stealth.New("TextButton", card)
             barBg.Size = UDim2.new(1, -18, 0, 7)
             barBg.Position = UDim2.new(0, 9, 0, 23)
             barBg.Text = ""
             barBg.AutoButtonColor = false
-            barBg.Parent = card
-            Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+            Stealth.New("UICorner", barBg).CornerRadius = UDim.new(1, 0)
 
-            local fill = Instance.new("Frame")
-            Stealth.RandomizeName(fill)
+            local fill = Stealth.New("Frame", barBg)
             fill.Size = UDim2.new((currentVal - minVal) / (maxVal - minVal), 0, 1, 0)
-            fill.Parent = barBg
-            Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+            Stealth.New("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
             registerThemeCallback(function(t)
                 card.BackgroundColor3 = t.BgCard
@@ -2137,16 +2150,13 @@ do
         end
 
         function TabObj:AddKeybind(opts)
-            local card = Instance.new("Frame")
-            Stealth.RandomizeName(card)
+            local card = Stealth.New("Frame", page)
             card.Size = UDim2.new(1, 0, 0, 26)
             card.BackgroundTransparency = 0.25
-            card.Parent = page
-            Instance.new("UICorner", card).CornerRadius = UDim.new(0, 7)
+            Stealth.New("UICorner", card).CornerRadius = UDim.new(0, 7)
             local stroke = UI.applyNeonStroke(card, THEME.Accent, 0.8, 1)
 
-            local label = Instance.new("TextLabel")
-            Stealth.RandomizeName(label)
+            local label = Stealth.New("TextLabel", card)
             label.Size = UDim2.new(0.58, 0, 1, 0)
             label.Position = UDim2.new(0, 9, 0, 0)
             label.BackgroundTransparency = 1
@@ -2155,28 +2165,23 @@ do
             label.TextSize = 9
             label.TextTruncate = Enum.TextTruncate.AtEnd
             label.TextXAlignment = Enum.TextXAlignment.Left
-            label.Parent = card
 
-            local box = Instance.new("TextButton")
-            Stealth.RandomizeName(box)
+            local box = Stealth.New("TextButton", card)
             box.Size = UDim2.new(0, 46, 0, 18)
             box.Position = UDim2.new(1, -76, 0.5, -9)
             box.Text = Config.Keybinds[opts.KeyName] or "None"
             box.Font = Enum.Font.GothamBold
             box.TextSize = 8
-            box.Parent = card
-            Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
+            Stealth.New("UICorner", box).CornerRadius = UDim.new(0, 5)
             local boxStroke = UI.applyNeonStroke(box, THEME.Accent, 0.5, 1)
 
-            local clearBtn = Instance.new("TextButton")
-            Stealth.RandomizeName(clearBtn)
+            local clearBtn = Stealth.New("TextButton", card)
             clearBtn.Size = UDim2.new(0, 20, 0, 18)
             clearBtn.Position = UDim2.new(1, -26, 0.5, -9)
             clearBtn.Text = "✕"
             clearBtn.Font = Enum.Font.GothamBold
             clearBtn.TextSize = 8
-            clearBtn.Parent = card
-            Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(0, 5)
+            Stealth.New("UICorner", clearBtn).CornerRadius = UDim.new(0, 5)
             local clearStroke = UI.applyNeonStroke(clearBtn, THEME.AccentRed, 0.55, 1)
 
             local function refreshKeyVisual()
@@ -2238,15 +2243,13 @@ do
         end
 
         function TabObj:AddButton(opts)
-            local btn = Instance.new("TextButton")
-            Stealth.RandomizeName(btn)
+            local btn = Stealth.New("TextButton", page)
             btn.Size = UDim2.new(1, 0, 0, 26)
             btn.BackgroundTransparency = 0.18
             btn.Text = opts.Title
             btn.Font = Enum.Font.GothamBold
             btn.TextSize = 9
-            btn.Parent = page
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+            Stealth.New("UICorner", btn).CornerRadius = UDim.new(0, 7)
             local stroke = UI.applyNeonStroke(btn, opts.Danger and THEME.AccentRed or THEME.Accent, 0.35, 1)
 
             registerThemeCallback(function(t)
@@ -2321,14 +2324,11 @@ do
 
     loadWaypoints()
 
-    local wpInputBar = Instance.new("Frame")
-    Stealth.RandomizeName(wpInputBar)
+    local wpInputBar = Stealth.New("Frame", TabMove.Page)
     wpInputBar.Size = UDim2.new(1, 0, 0, 26)
     wpInputBar.BackgroundTransparency = 1
-    wpInputBar.Parent = TabMove.Page
 
-    local wpNameBox = Instance.new("TextBox")
-    Stealth.RandomizeName(wpNameBox)
+    local wpNameBox = Stealth.New("TextBox", wpInputBar)
     wpNameBox.Size = UDim2.new(1, -68, 1, 0)
     wpNameBox.BackgroundTransparency = 0.15
     wpNameBox.Text = ""
@@ -2336,32 +2336,26 @@ do
     wpNameBox.Font = Enum.Font.Gotham
     wpNameBox.TextSize = 9
     wpNameBox.ClearTextOnFocus = false
-    wpNameBox.Parent = wpInputBar
-    Instance.new("UICorner", wpNameBox).CornerRadius = UDim.new(0, 6)
+    Stealth.New("UICorner", wpNameBox).CornerRadius = UDim.new(0, 6)
     local wpBoxStroke = UI.applyNeonStroke(wpNameBox, THEME.Accent, 0.65, 1)
 
-    local wpSaveBtn = Instance.new("TextButton")
-    Stealth.RandomizeName(wpSaveBtn)
+    local wpSaveBtn = Stealth.New("TextButton", wpInputBar)
     wpSaveBtn.Size = UDim2.new(0, 64, 1, 0)
     wpSaveBtn.Position = UDim2.new(1, -64, 0, 0)
     wpSaveBtn.Text = "💾 Guardar"
     wpSaveBtn.Font = Enum.Font.GothamBold
     wpSaveBtn.TextSize = 8
-    wpSaveBtn.Parent = wpInputBar
-    Instance.new("UICorner", wpSaveBtn).CornerRadius = UDim.new(0, 6)
+    Stealth.New("UICorner", wpSaveBtn).CornerRadius = UDim.new(0, 6)
     local wpSaveStroke = UI.applyNeonStroke(wpSaveBtn, THEME.AccentGreen, 0.35, 1)
 
-    local WaypointsListContainer = Instance.new("Frame")
-    Stealth.RandomizeName(WaypointsListContainer)
+    local WaypointsListContainer = Stealth.New("Frame", TabMove.Page)
     WaypointsListContainer.Size = UDim2.new(1, 0, 0, 0)
     WaypointsListContainer.AutomaticSize = Enum.AutomaticSize.Y
     WaypointsListContainer.BackgroundTransparency = 1
-    WaypointsListContainer.Parent = TabMove.Page
 
-    local WaypointsListLayout = Instance.new("UIListLayout")
+    local WaypointsListLayout = Stealth.New("UIListLayout", WaypointsListContainer)
     WaypointsListLayout.Padding = UDim.new(0, 4)
     WaypointsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    WaypointsListLayout.Parent = WaypointsListContainer
 
     local function renderWaypointsList()
         for _, child in ipairs(WaypointsListContainer:GetChildren()) do
@@ -2370,31 +2364,26 @@ do
 
         local list = Modules.waypointsStore[placeKey] or {}
         if #list == 0 then
-            local emptyLbl = Instance.new("TextLabel")
-            Stealth.RandomizeName(emptyLbl)
+            local emptyLbl = Stealth.New("TextLabel", WaypointsListContainer)
             emptyLbl.Size = UDim2.new(1, 0, 0, 20)
             emptyLbl.BackgroundTransparency = 1
             emptyLbl.Text = "Sin waypoints guardados en este mapa."
             emptyLbl.TextColor3 = THEME.TextMuted
             emptyLbl.Font = Enum.Font.Gotham
             emptyLbl.TextSize = 8
-            emptyLbl.Parent = WaypointsListContainer
             return
         end
 
         for idx, wp in ipairs(list) do
-            local row = Instance.new("Frame")
-            Stealth.RandomizeName(row)
+            local row = Stealth.New("Frame", WaypointsListContainer)
             row.Size = UDim2.new(1, 0, 0, 26)
             row.BackgroundColor3 = THEME.BgCard
             row.BackgroundTransparency = 0.25
             row.LayoutOrder = idx
-            row.Parent = WaypointsListContainer
-            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+            Stealth.New("UICorner", row).CornerRadius = UDim.new(0, 6)
             UI.applyNeonStroke(row, THEME.Accent, 0.78, 1)
 
-            local titleLbl = Instance.new("TextLabel")
-            Stealth.RandomizeName(titleLbl)
+            local titleLbl = Stealth.New("TextLabel", row)
             titleLbl.Size = UDim2.new(1, -66, 1, 0)
             titleLbl.Position = UDim2.new(0, 8, 0, 0)
             titleLbl.BackgroundTransparency = 1
@@ -2404,10 +2393,8 @@ do
             titleLbl.TextSize = 9
             titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
             titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-            titleLbl.Parent = row
 
-            local tpBtn = Instance.new("TextButton")
-            Stealth.RandomizeName(tpBtn)
+            local tpBtn = Stealth.New("TextButton", row)
             tpBtn.Size = UDim2.new(0, 30, 0, 18)
             tpBtn.Position = UDim2.new(1, -56, 0.5, -9)
             tpBtn.BackgroundColor3 = THEME.Accent
@@ -2415,8 +2402,7 @@ do
             tpBtn.TextColor3 = THEME.BgMain
             tpBtn.Font = Enum.Font.GothamBold
             tpBtn.TextSize = 8
-            tpBtn.Parent = row
-            Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+            Stealth.New("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
             tpBtn.MouseButton1Click:Connect(function()
                 local cf = CFrame.new(wp.x, wp.y, wp.z)
                 if wp.rx and wp.ry and wp.rz then
@@ -2425,8 +2411,7 @@ do
                 Funcs.SafeTeleport(cf)
             end)
 
-            local delBtn = Instance.new("TextButton")
-            Stealth.RandomizeName(delBtn)
+            local delBtn = Stealth.New("TextButton", row)
             delBtn.Size = UDim2.new(0, 20, 0, 18)
             delBtn.Position = UDim2.new(1, -23, 0.5, -9)
             delBtn.BackgroundColor3 = THEME.BgHeader
@@ -2434,8 +2419,7 @@ do
             delBtn.TextColor3 = THEME.AccentRed
             delBtn.Font = Enum.Font.GothamBold
             delBtn.TextSize = 8
-            delBtn.Parent = row
-            Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
+            Stealth.New("UICorner", delBtn).CornerRadius = UDim.new(0, 4)
             UI.applyNeonStroke(delBtn, THEME.AccentRed, 0.55, 1)
             delBtn.MouseButton1Click:Connect(function()
                 table.remove(Modules.waypointsStore[placeKey], idx)
@@ -2555,23 +2539,19 @@ task.wait()
 -- 👥 PASO 4 DE CARGA: PESTAÑA 3 (JUGADORES, HITBOX, MUTE Y AMIGOS)
 -- ==========================================
 do
-    local SubTabBar = Instance.new("Frame")
-    Stealth.RandomizeName(SubTabBar)
+    local SubTabBar = Stealth.New("Frame", TabPlayers.Page)
     SubTabBar.Size = UDim2.new(1, 0, 0, 22)
     SubTabBar.BackgroundTransparency = 1
-    SubTabBar.Parent = TabPlayers.Page
 
     local function makeSubTabBtn(text, posX)
-        local b = Instance.new("TextButton")
-        Stealth.RandomizeName(b)
+        local b = Stealth.New("TextButton", SubTabBar)
         b.Size = UDim2.new(0.5, -2, 1, 0)
         b.Position = posX
         b.Text = text
         b.Font = Enum.Font.GothamBold
         b.TextSize = 8
         b.AutoButtonColor = false
-        b.Parent = SubTabBar
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+        Stealth.New("UICorner", b).CornerRadius = UDim.new(0, 6)
         local st = UI.applyNeonStroke(b, THEME.Accent, 0.5, 1)
         return b, st
     end
@@ -2579,8 +2559,7 @@ do
     local SubServerBtn, subServerStroke   = makeSubTabBtn("🌐 En Servidor", UDim2.new(0, 0, 0, 0))
     local SubFriendsBtn, subFriendsStroke = makeSubTabBtn("⭐ Amigos",      UDim2.new(0.5, 2, 0, 0))
 
-    local searchBox = Instance.new("TextBox")
-    Stealth.RandomizeName(searchBox)
+    local searchBox = Stealth.New("TextBox", TabPlayers.Page)
     searchBox.Size = UDim2.new(1, 0, 0, 24)
     searchBox.BackgroundTransparency = 0.15
     searchBox.Text = ""
@@ -2588,26 +2567,21 @@ do
     searchBox.Font = Enum.Font.Gotham
     searchBox.TextSize = 10
     searchBox.ClearTextOnFocus = false
-    searchBox.Parent = TabPlayers.Page
-    Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
+    Stealth.New("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
     local searchStroke = UI.applyNeonStroke(searchBox, THEME.Accent, 0.65, 1)
 
-    local SpectateBar = Instance.new("Frame")
-    Stealth.RandomizeName(SpectateBar)
+    local SpectateBar = Stealth.New("Frame", TabPlayers.Page)
     SpectateBar.Size = UDim2.new(1, 0, 0, 24)
     SpectateBar.BackgroundTransparency = 1
-    SpectateBar.Parent = TabPlayers.Page
 
     local function makeSpecNavBtn(text, pos, size)
-        local b = Instance.new("TextButton")
-        Stealth.RandomizeName(b)
+        local b = Stealth.New("TextButton", SpectateBar)
         b.Size = size
         b.Position = pos
         b.Text = text
         b.Font = Enum.Font.GothamBold
         b.TextSize = 9
-        b.Parent = SpectateBar
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+        Stealth.New("UICorner", b).CornerRadius = UDim.new(0, 6)
         local st = UI.applyNeonStroke(b, THEME.Accent, 0.5, 1)
         return b, st
     end
@@ -2616,15 +2590,13 @@ do
     local SelfSpecBtn, selfSpecStroke = makeSpecNavBtn("🏠 Mi Cámara", UDim2.new(0, 32, 0, 0), UDim2.new(1, -64, 1, 0))
     local NextSpecBtn, nextSpecStroke = makeSpecNavBtn("▶", UDim2.new(1, -28, 0, 0),    UDim2.new(0, 28, 1, 0))
 
-    local MuteAllBtn = Instance.new("TextButton")
-    Stealth.RandomizeName(MuteAllBtn)
+    local MuteAllBtn = Stealth.New("TextButton", TabPlayers.Page)
     MuteAllBtn.Size = UDim2.new(1, 0, 0, 22)
     MuteAllBtn.BackgroundTransparency = 0.15
     MuteAllBtn.Text = "🔇 Silenciar a Todos"
     MuteAllBtn.Font = Enum.Font.GothamBold
     MuteAllBtn.TextSize = 8
-    MuteAllBtn.Parent = TabPlayers.Page
-    Instance.new("UICorner", MuteAllBtn).CornerRadius = UDim.new(0, 6)
+    Stealth.New("UICorner", MuteAllBtn).CornerRadius = UDim.new(0, 6)
     local muteAllStroke = UI.applyNeonStroke(MuteAllBtn, THEME.Accent, 0.5, 1)
 
     -- 📦 HITBOX EXPANDER AJUSTABLE
@@ -2666,42 +2638,34 @@ do
         end
     })
 
-    local RefreshFriendsBtn = Instance.new("TextButton")
-    Stealth.RandomizeName(RefreshFriendsBtn)
+    local RefreshFriendsBtn = Stealth.New("TextButton", TabPlayers.Page)
     RefreshFriendsBtn.Size = UDim2.new(1, 0, 0, 24)
     RefreshFriendsBtn.BackgroundTransparency = 0.15
     RefreshFriendsBtn.Text = "🔄 Actualizar Amigos Conectados"
     RefreshFriendsBtn.Font = Enum.Font.GothamBold
     RefreshFriendsBtn.TextSize = 9
     RefreshFriendsBtn.Visible = false
-    RefreshFriendsBtn.Parent = TabPlayers.Page
-    Instance.new("UICorner", RefreshFriendsBtn).CornerRadius = UDim.new(0, 6)
+    Stealth.New("UICorner", RefreshFriendsBtn).CornerRadius = UDim.new(0, 6)
     local refreshFriendsStroke = UI.applyNeonStroke(RefreshFriendsBtn, THEME.Accent, 0.4, 1)
 
-    local PlayerListContainer = Instance.new("Frame")
-    Stealth.RandomizeName(PlayerListContainer)
+    local PlayerListContainer = Stealth.New("Frame", TabPlayers.Page)
     PlayerListContainer.Size = UDim2.new(1, 0, 0, 0)
     PlayerListContainer.AutomaticSize = Enum.AutomaticSize.Y
     PlayerListContainer.BackgroundTransparency = 1
-    PlayerListContainer.Parent = TabPlayers.Page
 
-    local PlayerListLayout = Instance.new("UIListLayout")
+    local PlayerListLayout = Stealth.New("UIListLayout", PlayerListContainer)
     PlayerListLayout.Padding = UDim.new(0, 4)
     PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    PlayerListLayout.Parent = PlayerListContainer
 
-    local FriendsListContainer = Instance.new("Frame")
-    Stealth.RandomizeName(FriendsListContainer)
+    local FriendsListContainer = Stealth.New("Frame", TabPlayers.Page)
     FriendsListContainer.Size = UDim2.new(1, 0, 0, 0)
     FriendsListContainer.AutomaticSize = Enum.AutomaticSize.Y
     FriendsListContainer.BackgroundTransparency = 1
     FriendsListContainer.Visible = false
-    FriendsListContainer.Parent = TabPlayers.Page
 
-    local FriendsListLayout = Instance.new("UIListLayout")
+    local FriendsListLayout = Stealth.New("UIListLayout", FriendsListContainer)
     FriendsListLayout.Padding = UDim.new(0, 4)
     FriendsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    FriendsListLayout.Parent = FriendsListContainer
 
     local function applyAudioMuteState(plr, isMuted)
         if not plr or plr == LocalPlayer then return end
@@ -3101,25 +3065,21 @@ do
                         else locText = "En línea (Web/Menú)" end
                     end
 
-                    local row = Instance.new("Frame")
-                    Stealth.RandomizeName(row)
+                    local row = Stealth.New("Frame", FriendsListContainer)
                     row.Size = UDim2.new(1, 0, 0, 32)
                     row.BackgroundColor3 = THEME.BgCard
                     row.BackgroundTransparency = 0.28
                     row.LayoutOrder = idx
-                    row.Parent = FriendsListContainer
-                    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+                    Stealth.New("UICorner", row).CornerRadius = UDim.new(0, 6)
                     UI.applyNeonStroke(row, canJoinInstance and THEME.AccentGreen or THEME.Accent, 0.72, 1)
 
-                    local thumbImg = Instance.new("ImageLabel")
-                    Stealth.RandomizeName(thumbImg)
+                    local thumbImg = Stealth.New("ImageLabel", row)
                     thumbImg.Size = UDim2.new(0, 22, 0, 22)
                     thumbImg.Position = UDim2.new(0, 4, 0.5, -11)
                     thumbImg.BackgroundColor3 = THEME.BgHeader
                     thumbImg.BorderSizePixel = 0
                     thumbImg.Image = ""
-                    thumbImg.Parent = row
-                    Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
+                    Stealth.New("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
                     if userId > 0 then
                         task.spawn(function()
@@ -3133,8 +3093,7 @@ do
                         end)
                     end
 
-                    local nameLbl = Instance.new("TextLabel")
-                    Stealth.RandomizeName(nameLbl)
+                    local nameLbl = Stealth.New("TextLabel", row)
                     nameLbl.Size = UDim2.new(0.46, 0, 0, 14)
                     nameLbl.Position = UDim2.new(0, 30, 0, 3)
                     nameLbl.BackgroundTransparency = 1
@@ -3144,10 +3103,8 @@ do
                     nameLbl.TextSize = 9
                     nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-                    nameLbl.Parent = row
 
-                    local gameLbl = Instance.new("TextLabel")
-                    Stealth.RandomizeName(gameLbl)
+                    local gameLbl = Stealth.New("TextLabel", row)
                     gameLbl.Size = UDim2.new(0.46, 0, 0, 11)
                     gameLbl.Position = UDim2.new(0, 30, 0, 17)
                     gameLbl.BackgroundTransparency = 1
@@ -3157,11 +3114,9 @@ do
                     gameLbl.TextSize = 8
                     gameLbl.TextTruncate = Enum.TextTruncate.AtEnd
                     gameLbl.TextXAlignment = Enum.TextXAlignment.Left
-                    gameLbl.Parent = row
 
                     if canJoinInstance and placeId ~= game.PlaceId then
-                        local salaBtn = Instance.new("TextButton")
-                        Stealth.RandomizeName(salaBtn)
+                        local salaBtn = Stealth.New("TextButton", row)
                         salaBtn.Size = UDim2.new(0, 34, 0, 18)
                         salaBtn.Position = UDim2.new(1, -74, 0.5, -9)
                         salaBtn.BackgroundColor3 = THEME.AccentGreen
@@ -3169,14 +3124,12 @@ do
                         salaBtn.Text = "SALA"
                         salaBtn.Font = Enum.Font.GothamBold
                         salaBtn.TextSize = 7
-                        salaBtn.Parent = row
-                        Instance.new("UICorner", salaBtn).CornerRadius = UDim.new(0, 4)
+                        Stealth.New("UICorner", salaBtn).CornerRadius = UDim.new(0, 4)
                         salaBtn.MouseButton1Click:Connect(function()
                             joinExperienceOrServer(salaBtn, "SALA", placeId, gameId)
                         end)
 
-                        local juegoBtn = Instance.new("TextButton")
-                        Stealth.RandomizeName(juegoBtn)
+                        local juegoBtn = Stealth.New("TextButton", row)
                         juegoBtn.Size = UDim2.new(0, 34, 0, 18)
                         juegoBtn.Position = UDim2.new(1, -37, 0.5, -9)
                         juegoBtn.BackgroundColor3 = THEME.Accent
@@ -3184,20 +3137,17 @@ do
                         juegoBtn.Text = "JUEGO"
                         juegoBtn.Font = Enum.Font.GothamBold
                         juegoBtn.TextSize = 7
-                        juegoBtn.Parent = row
-                        Instance.new("UICorner", juegoBtn).CornerRadius = UDim.new(0, 4)
+                        Stealth.New("UICorner", juegoBtn).CornerRadius = UDim.new(0, 4)
                         juegoBtn.MouseButton1Click:Connect(function()
                             joinExperienceOrServer(juegoBtn, "JUEGO", placeId, nil)
                         end)
                     else
-                        local joinBtn = Instance.new("TextButton")
-                        Stealth.RandomizeName(joinBtn)
+                        local joinBtn = Stealth.New("TextButton", row)
                         joinBtn.Size = UDim2.new(0, 52, 0, 18)
                         joinBtn.Position = UDim2.new(1, -56, 0.5, -9)
                         joinBtn.Font = Enum.Font.GothamBold
                         joinBtn.TextSize = 7
-                        joinBtn.Parent = row
-                        Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 4)
+                        Stealth.New("UICorner", joinBtn).CornerRadius = UDim.new(0, 4)
 
                         if canJoinInstance then
                             joinBtn.BackgroundColor3 = THEME.AccentGreen
@@ -3226,15 +3176,13 @@ do
                     })
                 end
             else
-                local emptyLbl = Instance.new("TextLabel")
-                Stealth.RandomizeName(emptyLbl)
+                local emptyLbl = Stealth.New("TextLabel", FriendsListContainer)
                 emptyLbl.Size = UDim2.new(1, 0, 0, 28)
                 emptyLbl.BackgroundTransparency = 1
                 emptyLbl.Text = "No hay amigos conectados en este momento."
                 emptyLbl.TextColor3 = THEME.TextMuted
                 emptyLbl.Font = Enum.Font.Gotham
                 emptyLbl.TextSize = 9
-                emptyLbl.Parent = FriendsListContainer
             end
 
             applyPlayerFilter()
@@ -3272,25 +3220,21 @@ do
         local isFriend = false
         pcall(function() isFriend = LocalPlayer:IsFriendsWith(p.UserId) end)
 
-        local row = Instance.new("Frame")
-        Stealth.RandomizeName(row)
+        local row = Stealth.New("Frame", PlayerListContainer)
         row.Size = UDim2.new(1, 0, 0, 30)
         row.BackgroundColor3 = THEME.BgCard
         row.BackgroundTransparency = 0.28
         row.LayoutOrder = isFriend and -100000 or 99999
-        row.Parent = PlayerListContainer
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+        Stealth.New("UICorner", row).CornerRadius = UDim.new(0, 6)
         local stroke = UI.applyNeonStroke(row, isFriend and Color3.fromRGB(255, 215, 0) or THEME.Accent, 0.78, 1)
 
-        local thumbImg = Instance.new("ImageLabel")
-        Stealth.RandomizeName(thumbImg)
+        local thumbImg = Stealth.New("ImageLabel", row)
         thumbImg.Size = UDim2.new(0, 22, 0, 22)
         thumbImg.Position = UDim2.new(0, 4, 0.5, -11)
         thumbImg.BackgroundColor3 = THEME.BgHeader
         thumbImg.BorderSizePixel = 0
         thumbImg.Image = ""
-        thumbImg.Parent = row
-        Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
+        Stealth.New("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
         task.spawn(function()
             local ok, url = pcall(function()
@@ -3302,8 +3246,7 @@ do
             end
         end)
 
-        local nameLbl = Instance.new("TextLabel")
-        Stealth.RandomizeName(nameLbl)
+        local nameLbl = Stealth.New("TextLabel", row)
         nameLbl.Size = UDim2.new(1, -122, 0, 14)
         nameLbl.Position = UDim2.new(0, 30, 0, 2)
         nameLbl.BackgroundTransparency = 1
@@ -3313,10 +3256,8 @@ do
         nameLbl.TextSize = 9
         nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
         nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        nameLbl.Parent = row
 
-        local distLbl = Instance.new("TextLabel")
-        Stealth.RandomizeName(distLbl)
+        local distLbl = Stealth.New("TextLabel", row)
         distLbl.Size = UDim2.new(1, -122, 0, 11)
         distLbl.Position = UDim2.new(0, 30, 0, 16)
         distLbl.BackgroundTransparency = 1
@@ -3325,11 +3266,9 @@ do
         distLbl.Font = Enum.Font.Gotham
         distLbl.TextSize = 8
         distLbl.TextXAlignment = Enum.TextXAlignment.Left
-        distLbl.Parent = row
 
         local isMutedInit = (Modules.mutedPlayers[p.UserId] == true) or Runtime.muteAllActive
-        local muteBtn = Instance.new("TextButton")
-        Stealth.RandomizeName(muteBtn)
+        local muteBtn = Stealth.New("TextButton", row)
         muteBtn.Size = UDim2.new(0, 22, 0, 18)
         muteBtn.Position = UDim2.new(1, -86, 0.5, -9)
         muteBtn.BackgroundColor3 = isMutedInit and THEME.AccentRed or THEME.SwitchOff
@@ -3337,14 +3276,12 @@ do
         muteBtn.TextColor3 = THEME.TextMain
         muteBtn.Font = Enum.Font.GothamBold
         muteBtn.TextSize = 8
-        muteBtn.Parent = row
-        Instance.new("UICorner", muteBtn).CornerRadius = UDim.new(0, 4)
+        Stealth.New("UICorner", muteBtn).CornerRadius = UDim.new(0, 4)
         muteBtn.MouseButton1Click:Connect(function()
             Funcs.setPlayerMuted(p, not (Modules.mutedPlayers[p.UserId] == true))
         end)
 
-        local tpBtn = Instance.new("TextButton")
-        Stealth.RandomizeName(tpBtn)
+        local tpBtn = Stealth.New("TextButton", row)
         tpBtn.Size = UDim2.new(0, 26, 0, 18)
         tpBtn.Position = UDim2.new(1, -61, 0.5, -9)
         tpBtn.BackgroundColor3 = THEME.Accent
@@ -3352,16 +3289,14 @@ do
         tpBtn.TextColor3 = THEME.BgMain
         tpBtn.Font = Enum.Font.GothamBold
         tpBtn.TextSize = 8
-        tpBtn.Parent = row
-        Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+        Stealth.New("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
         tpBtn.MouseButton1Click:Connect(function()
             local rig = Funcs.getPlayerRig(p)
             local torso = getRigTorso(rig)
             if torso then Funcs.SafeTeleport(torso.CFrame + Vector3.new(0, 3.5, 0)) end
         end)
 
-        local viewBtn = Instance.new("TextButton")
-        Stealth.RandomizeName(viewBtn)
+        local viewBtn = Stealth.New("TextButton", row)
         viewBtn.Size = UDim2.new(0, 30, 0, 18)
         viewBtn.Position = UDim2.new(1, -32, 0.5, -9)
         viewBtn.BackgroundColor3 = THEME.SwitchOff
@@ -3369,8 +3304,7 @@ do
         viewBtn.TextColor3 = THEME.TextMain
         viewBtn.Font = Enum.Font.GothamBold
         viewBtn.TextSize = 7
-        viewBtn.Parent = row
-        Instance.new("UICorner", viewBtn).CornerRadius = UDim.new(0, 4)
+        Stealth.New("UICorner", viewBtn).CornerRadius = UDim.new(0, 4)
         viewBtn.MouseButton1Click:Connect(function()
             Funcs.spectatePlayer(p)
         end)
@@ -3667,8 +3601,7 @@ do
     makeDraggable(UI.MiniBtn, UI.MiniBtn, "MiniBtn", true)
 
     local function createQuickBtn(name, shortText, onClick, isActionBtn)
-        local btn = Instance.new("TextButton")
-        Stealth.RandomizeName(btn)
+        local btn = Stealth.New("TextButton", UI.ScreenGui)
         btn.Size = UDim2.new(0, 36, 0, 36)
         btn.Position = getSavedUDim2("Quick_" .. name)
         btn.BackgroundTransparency = 0.15
@@ -3676,8 +3609,7 @@ do
         btn.TextSize = 9
         btn.Font = Enum.Font.GothamBold
         btn.Visible = (name == "TPS" and not isTouchDevice) and false or (Config.QuickVisible[name] ~= false)
-        btn.Parent = UI.ScreenGui
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
+        Stealth.New("UICorner", btn).CornerRadius = UDim.new(1, 0)
         local stroke = UI.applyNeonStroke(btn, isActionBtn and THEME.AccentRed or THEME.Accent, 0.4, 1.3)
 
         QuickButtons[name] = btn
@@ -3851,6 +3783,12 @@ do
 
     local function isOverGui(pos)
         if not UI.ScreenGui or not UI.ScreenGui.Parent then return false end
+        local parentGui = UI.ScreenGui.Parent
+        if parentGui and parentGui.GetGuiObjectsAtPosition then
+            for _, obj in ipairs(parentGui:GetGuiObjectsAtPosition(pos.X, pos.Y)) do
+                if obj:IsDescendantOf(UI.ScreenGui) then return true end
+            end
+        end
         for _, obj in ipairs(LocalPlayer.PlayerGui:GetGuiObjectsAtPosition(pos.X, pos.Y)) do
             if obj:IsDescendantOf(UI.ScreenGui) then return true end
         end
