@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Instant Interact + Server Hop
+-- Stealth Avanzado + Anti-Rubberband TP + Server Hop Variado
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -14,6 +14,8 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+
+math.randomseed(tick() * 1000)
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -368,7 +370,7 @@ local function rebuildXRayFilter()
 end
 
 -- ==========================================
--- ⚡ PACK DE SESIÓN Y RENDIMIENTO
+-- ⚡ PACK DE SESIÓN, RENDIMIENTO Y SERVER HOP VARIADO
 -- ==========================================
 local gfxBackup = setmetatable({}, { __mode = "k" })
 local savedGfxLighting = {}
@@ -469,15 +471,80 @@ local function performRejoin(btn)
     end
 end
 
+-- Historial persistente de servidores visitados para evitar repeticiones
+local SERVERS_FILE = "xcs_servers.json"
+local VisitedStore = {}
+
+local function loadVisitedServers()
+    pcall(function()
+        if isfile and readfile and isfile(SERVERS_FILE) then
+            local decoded = HttpService:JSONDecode(readfile(SERVERS_FILE))
+            if type(decoded) == "table" then
+                VisitedStore = decoded
+            end
+        end
+    end)
+    local placeKey = tostring(game.PlaceId)
+    if type(VisitedStore[placeKey]) ~= "table" then
+        VisitedStore[placeKey] = {}
+    end
+end
+
+local function saveVisitedServers()
+    pcall(function()
+        if writefile then
+            writefile(SERVERS_FILE, HttpService:JSONEncode(VisitedStore))
+        end
+    end)
+end
+
+local function markServerVisited(jobId)
+    if not jobId or jobId == "" then return end
+    local placeKey = tostring(game.PlaceId)
+    if type(VisitedStore[placeKey]) ~= "table" then
+        VisitedStore[placeKey] = {}
+    end
+    VisitedStore[placeKey][jobId] = true
+    saveVisitedServers()
+end
+
+loadVisitedServers()
+markServerVisited(game.JobId)
+
 local isHopping = false
+local activeHopBtn = nil
+local activeHopOrigText = nil
+
+HubMaid:GiveTask(TeleportService.TeleportInitFailed:Connect(function(_, teleportResult)
+    if isHopping then
+        isHopping = false
+        if activeHopBtn and activeHopBtn.Parent then
+            activeHopBtn.Text = (teleportResult == Enum.TeleportResult.GameFull)
+                and "⚠️ Se llenó, reintentá"
+                or "⚠️ Error TP, reintentá"
+            local btnRef, origRef = activeHopBtn, activeHopOrigText
+            task.delay(1.8, function()
+                if btnRef and btnRef.Parent and origRef then
+                    btnRef.Text = origRef
+                end
+            end)
+        end
+    end
+end))
+
 local function performServerHop(btn, sortOrder)
     if isHopping then return end
     isHopping = true
     local origText = btn.Text
-    local order = sortOrder or "Asc"
-    btn.Text = (order == "Desc") and "🔍 Buscando servidor lleno..." or "🔍 Buscando servidor..."
+    activeHopBtn = btn
+    activeHopOrigText = origText
+    local order = sortOrder or "Desc"
+    btn.Text = "🔍 Buscando servidor variado..."
 
     task.spawn(function()
+        local placeKey = tostring(game.PlaceId)
+        local visited = VisitedStore[placeKey] or {}
+
         local ok, res = pcall(function()
             local url = string.format(
                 "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=%s&limit=100",
@@ -488,21 +555,71 @@ local function performServerHop(btn, sortOrder)
         end)
 
         if ok and res and type(res.data) == "table" then
+            local validServers = {}
             for _, srv in ipairs(res.data) do
-                if srv.id ~= game.JobId and tonumber(srv.playing) and tonumber(srv.maxPlayers) and srv.playing < srv.maxPlayers then
-                    btn.Text = "✅ Conectando (" .. srv.playing .. "/" .. srv.maxPlayers .. ")..."
-                    local tpOk = pcall(function()
-                        TeleportService:TeleportToPlaceInstance(game.PlaceId, srv.id, LocalPlayer)
-                    end)
-                    if tpOk then
-                        isHopping = false
-                        return
+                local playing = tonumber(srv.playing)
+                local maxP = tonumber(srv.maxPlayers)
+                if srv.id and srv.id ~= game.JobId and playing and maxP then
+                    local freeSlots = maxP - playing
+                    -- Margen de ~10 espacios libres para evitar Error 772 (si el mapa es muy chico, usa 25% de margen)
+                    local minFree = (maxP >= 15) and 10 or math.max(3, math.floor(maxP * 0.25))
+                    if freeSlots >= minFree and playing >= 1 then
+                        table.insert(validServers, srv)
                     end
+                end
+            end
+
+            -- Si no hubo con >= 10 espacios libres, relajar a >= 4 espacios libres
+            if #validServers == 0 then
+                for _, srv in ipairs(res.data) do
+                    local playing = tonumber(srv.playing)
+                    local maxP = tonumber(srv.maxPlayers)
+                    if srv.id and srv.id ~= game.JobId and playing and maxP and (maxP - playing) >= 4 then
+                        table.insert(validServers, srv)
+                    end
+                end
+            end
+
+            -- Filtrar los que todavía no visitaste
+            local unvisited = {}
+            for _, srv in ipairs(validServers) do
+                if not visited[srv.id] then
+                    table.insert(unvisited, srv)
+                end
+            end
+
+            -- Si ya pasaste por todos, reiniciar historial y volver a permitir los anteriores
+            if #unvisited == 0 and #validServers > 0 then
+                VisitedStore[placeKey] = { [game.JobId] = true }
+                saveVisitedServers()
+                unvisited = validServers
+                btn.Text = "🔄 Lista reiniciada..."
+                task.wait(0.4)
+            end
+
+            if #unvisited > 0 then
+                -- Elegir al azar entre los mejores candidatos para que sea bien variado
+                local poolSize = math.min(#unvisited, 15)
+                local chosen = unvisited[math.random(1, poolSize)]
+                markServerVisited(chosen.id)
+
+                btn.Text = "✅ Entrando (" .. chosen.playing .. "/" .. chosen.maxPlayers .. ")..."
+                local tpOk = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, chosen.id, LocalPlayer)
+                end)
+                if tpOk then
+                    task.delay(6, function()
+                        if isHopping then
+                            isHopping = false
+                            if btn and btn.Parent then btn.Text = origText end
+                        end
+                    end)
+                    return
                 end
             end
         end
 
-        btn.Text = "⚠️ Sin servidores libres"
+        btn.Text = "⚠️ Sin servidores disponibles"
         task.wait(1.5)
         if btn and btn.Parent then btn.Text = origText end
         isHopping = false
@@ -1855,14 +1972,14 @@ TabConfig:AddButton({
 })
 
 TabConfig:AddButton({
-    Title = "🔥 Server Hop (Más Gente)",
+    Title = "🔥 Server Hop (Con Gente / Variado)",
     Callback = function(btn)
         performServerHop(btn, "Desc")
     end
 })
 
 TabConfig:AddButton({
-    Title = "🌐 Server Hop (Menos Gente)",
+    Title = "🌐 Server Hop (Tranquilo / Variado)",
     Callback = function(btn)
         performServerHop(btn, "Asc")
     end
