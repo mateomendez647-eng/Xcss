@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.5 - Safe Boot & Modular)
--- ESP Multi-Rig/Anti-Límite + Enemigos/Compañeros/Bots + Hitbox Expander + Waypoints + Mute + Friends
+-- ESP Multi-Rig/Anti-Límite + Menú Desplegable (<) + Hitbox Expander + Waypoints + Mute + Friends
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -1874,18 +1874,19 @@ do
             card.Size = UDim2.new(1, 0, 0, 28)
             card.BackgroundTransparency = 0.25
             card.BorderSizePixel = 0
-            card.Parent = page
+            card.Parent = opts.Parent or page
             Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
             local stroke = UI.applyNeonStroke(card, THEME.Accent, 0.78, 1)
 
             local label = Instance.new("TextLabel")
             Stealth.RandomizeName(label)
-            label.Size = UDim2.new(0.75, 0, 1, 0)
+            label.Size = UDim2.new(1, -52, 1, 0)
             label.Position = UDim2.new(0, 9, 0, 0)
             label.BackgroundTransparency = 1
             label.Text = (opts.Icon and (opts.Icon .. "  ") or "") .. opts.Title
             label.Font = Enum.Font.GothamMedium
             label.TextSize = 10
+            label.TextTruncate = Enum.TextTruncate.AtEnd
             label.TextXAlignment = Enum.TextXAlignment.Left
             label.Parent = card
 
@@ -1944,7 +1945,100 @@ do
             end)
 
             updateVisual(current, true)
-            return { Set = updateVisual, Card = card }
+            return { Set = updateVisual, Card = card, Label = label }
+        end
+
+        function TabObj:AddCollapsibleToggle(opts)
+            local mainToggle = TabObj:AddToggle(opts)
+            local card = mainToggle.Card
+
+            mainToggle.Label.Size = UDim2.new(1, -80, 1, 0)
+
+            local arrowBtn = Instance.new("TextButton")
+            Stealth.RandomizeName(arrowBtn)
+            arrowBtn.Size = UDim2.new(0, 22, 0, 20)
+            arrowBtn.Position = UDim2.new(1, -68, 0.5, -10)
+            arrowBtn.BackgroundTransparency = 0.25
+            arrowBtn.Text = "<"
+            arrowBtn.Font = Enum.Font.GothamBold
+            arrowBtn.TextSize = 11
+            arrowBtn.AutoButtonColor = false
+            arrowBtn.Parent = card
+            Instance.new("UICorner", arrowBtn).CornerRadius = UDim.new(0, 5)
+            local arrowStroke = UI.applyNeonStroke(arrowBtn, THEME.Accent, 0.55, 1)
+
+            local boxFrame = Instance.new("Frame")
+            Stealth.RandomizeName(boxFrame)
+            boxFrame.Size = UDim2.new(1, 0, 0, 0)
+            boxFrame.AutomaticSize = Enum.AutomaticSize.Y
+            boxFrame.BackgroundTransparency = 0.18
+            boxFrame.BorderSizePixel = 0
+            boxFrame.Visible = false
+            boxFrame.Parent = page
+            Instance.new("UICorner", boxFrame).CornerRadius = UDim.new(0, 9)
+            local boxStroke = UI.applyNeonStroke(boxFrame, THEME.Accent, 0.25, 1.3)
+
+            local boxPad = Instance.new("UIPadding")
+            boxPad.PaddingTop = UDim.new(0, 6)
+            boxPad.PaddingBottom = UDim.new(0, 6)
+            boxPad.PaddingLeft = UDim.new(0, 6)
+            boxPad.PaddingRight = UDim.new(0, 6)
+            boxPad.Parent = boxFrame
+
+            local boxLayout = Instance.new("UIListLayout")
+            boxLayout.Padding = UDim.new(0, 4)
+            boxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            boxLayout.Parent = boxFrame
+
+            local footerBtn = Instance.new("TextButton")
+            Stealth.RandomizeName(footerBtn)
+            footerBtn.Size = UDim2.new(1, 0, 0, 18)
+            footerBtn.LayoutOrder = 999
+            footerBtn.BackgroundTransparency = 0.35
+            footerBtn.Text = "▲ Cerrar opciones ESP"
+            footerBtn.Font = Enum.Font.GothamBold
+            footerBtn.TextSize = 8
+            footerBtn.AutoButtonColor = false
+            footerBtn.Parent = boxFrame
+            Instance.new("UICorner", footerBtn).CornerRadius = UDim.new(0, 5)
+            local footerStroke = UI.applyNeonStroke(footerBtn, THEME.Accent, 0.65, 1)
+
+            local isExpanded = false
+
+            local function setExpanded(state)
+                isExpanded = state
+                boxFrame.Visible = isExpanded
+                Services.TweenService:Create(arrowBtn, TWEEN_FAST, {
+                    Rotation = isExpanded and -90 or 0,
+                    BackgroundColor3 = isExpanded and THEME.Accent or THEME.BgHeader,
+                    TextColor3 = isExpanded and THEME.BgMain or THEME.Accent
+                }):Play()
+                arrowStroke.Transparency = isExpanded and 0.15 or 0.55
+            end
+
+            arrowBtn.MouseButton1Click:Connect(function()
+                setExpanded(not isExpanded)
+            end)
+            footerBtn.MouseButton1Click:Connect(function()
+                setExpanded(false)
+            end)
+
+            registerThemeCallback(function(t)
+                arrowBtn.BackgroundColor3 = isExpanded and t.Accent or t.BgHeader
+                arrowBtn.TextColor3 = isExpanded and t.BgMain or t.Accent
+                arrowStroke.Color = t.Accent
+                boxFrame.BackgroundColor3 = t.BgHeader
+                boxStroke.Color = t.Accent
+                footerBtn.BackgroundColor3 = t.BgCard
+                footerBtn.TextColor3 = t.TextMuted
+                footerStroke.Color = t.Accent
+            end)
+
+            return {
+                Toggle = mainToggle,
+                Container = boxFrame,
+                SetExpanded = setExpanded
+            }
         end
 
         function TabObj:AddSlider(opts)
@@ -2385,43 +2479,54 @@ do
         renderWaypointsList()
     end)
 
-    -- Visuales y ESP
+    -- Visuales y ESP con Menú Desplegable (<) y Recuadro
     TabVisuals:AddSection("Cámara y Visión")
-    TabVisuals:AddToggle({ Key = "ESP", Icon = "🎯", Title = "ESP Jugadores", Callback = Funcs.toggleESP })
+    local espGroup = TabVisuals:AddCollapsibleToggle({
+        Key = "ESP", Icon = "🎯", Title = "ESP Jugadores", Callback = Funcs.toggleESP
+    })
 
     Controls.espEnemiesToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "⚔️", Title = "ESP: Marcar Enemigos", Default = Config.ESPEnemies ~= false,
         Callback = function(v) Config.ESPEnemies = v; saveStore(); Funcs.refreshESPAll() end
     })
     Controls.espTeammatesToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "🛡️", Title = "ESP: Marcar Compañeros", Default = Config.ESPTeammates == true,
         Callback = function(v) Config.ESPTeammates = v; saveStore(); Funcs.refreshESPAll() end
     })
     Controls.espIgnoreTeamsToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "🌐", Title = "ESP: Ignorar Equipos (Todos)", Default = Config.ESPIgnoreTeams == true,
         Callback = function(v) Config.ESPIgnoreTeams = v; saveStore(); Funcs.refreshESPAll() end
     })
     Controls.espNpcsToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "🤖", Title = "ESP: Incluir Bots / NPCs", Default = Config.ESPNPCs == true,
         Callback = function(v) Config.ESPNPCs = v; saveStore(); Funcs.refreshESPAll() end
     })
     Controls.espBodyMarkerToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "📦", Title = "ESP: Marcador en Cuerpo", Default = Config.ESPBodyMarker ~= false,
         Callback = function(v) Config.ESPBodyMarker = v; saveStore(); Funcs.refreshESPBillboards() end
     })
     Controls.espInfoToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "🏷️", Title = "ESP: Etiqueta Flotante", Default = Config.ESPInfo ~= false,
         Callback = function(v) Config.ESPInfo = v; saveStore(); Funcs.refreshESPBillboards() end
     })
     Controls.espNameToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "🪪", Title = "ESP: Mostrar Nombre", Default = Config.ESPName ~= false,
         Callback = function(v) Config.ESPName = v; saveStore(); Funcs.refreshESPBillboards() end
     })
     Controls.espHealthToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "❤️", Title = "ESP: Mostrar Vida (HP)", Default = Config.ESPHealth ~= false,
         Callback = function(v) Config.ESPHealth = v; saveStore(); Funcs.refreshESPBillboards() end
     })
     Controls.espDistToggle = TabVisuals:AddToggle({
+        Parent = espGroup.Container,
         Icon = "📏", Title = "ESP: Mostrar Distancia (m)", Default = Config.ESPDistance ~= false,
         Callback = function(v) Config.ESPDistance = v; saveStore(); Funcs.refreshESPBillboards() end
     })
@@ -3152,6 +3257,15 @@ do
 
     RefreshFriendsBtn.MouseButton1Click:Connect(refreshOnlineFriends)
 
+    local function getRigTorso(rig)
+        if not rig then return nil end
+        return rig:FindFirstChild("UpperTorso")
+            or rig:FindFirstChild("Torso")
+            or rig:FindFirstChild("HumanoidRootPart")
+            or rig.PrimaryPart
+            or rig:FindFirstChildWhichIsA("BasePart", true)
+    end
+
     function Funcs.createPlayerRow(p)
         if p == LocalPlayer or Modules.playerCards[p] then return end
 
@@ -3242,7 +3356,7 @@ do
         Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
         tpBtn.MouseButton1Click:Connect(function()
             local rig = Funcs.getPlayerRig(p)
-            local _, torso = getRigParts(rig)
+            local torso = getRigTorso(rig)
             if torso then Funcs.SafeTeleport(torso.CFrame + Vector3.new(0, 3.5, 0)) end
         end)
 
@@ -3280,10 +3394,10 @@ do
         while not Runtime.hubUnloaded do
             if UI.MainFrame.Visible and Runtime.ActiveTabName == "Jug." and Runtime.playersSubView == "Server" then
                 local myRig = Funcs.getPlayerRig(LocalPlayer)
-                local _, myTorso = getRigParts(myRig)
+                local myTorso = getRigTorso(myRig)
                 for plr, data in pairs(Modules.playerCards) do
                     local rig = Funcs.getPlayerRig(plr)
-                    local _, tTorso = getRigParts(rig)
+                    local tTorso = getRigTorso(rig)
                     if myTorso and tTorso then
                         local dist = math.floor((myTorso.Position - tTorso.Position).Magnitude)
                         data.DistLabel.Text = dist .. " m"
