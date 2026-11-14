@@ -1,6 +1,6 @@
 -- ==========================================
 -- HUB: xcs (Neon Glass v3.0 - Modular)
--- Stealth Avanzado + Anti-Rubberband TP + Server Hop Variado
+-- Stealth Avanzado + Anti-Rubberband TP + Join Friends + Server Hop
 -- ==========================================
 
 local Players = game:GetService("Players")
@@ -324,6 +324,7 @@ local hubUnloaded = false
 local listeningFor = nil
 local spectatingPlayer = nil
 local filterQuery = ""
+local playersSubView = "Server" -- "Server" o "Friends"
 
 local QuickButtons = {}
 local QuickButtonStrokes = {}
@@ -471,7 +472,6 @@ local function performRejoin(btn)
     end
 end
 
--- Historial persistente de servidores visitados para evitar repeticiones
 local SERVERS_FILE = "xcs_servers.json"
 local VisitedStore = {}
 
@@ -512,23 +512,26 @@ loadVisitedServers()
 markServerVisited(game.JobId)
 
 local isHopping = false
-local activeHopBtn = nil
-local activeHopOrigText = nil
+local activeTpBtn = nil
+local activeTpOrigText = nil
 
 HubMaid:GiveTask(TeleportService.TeleportInitFailed:Connect(function(_, teleportResult)
-    if isHopping then
-        isHopping = false
-        if activeHopBtn and activeHopBtn.Parent then
-            activeHopBtn.Text = (teleportResult == Enum.TeleportResult.GameFull)
-                and "⚠️ Se llenó, reintentá"
-                or "⚠️ Error TP, reintentá"
-            local btnRef, origRef = activeHopBtn, activeHopOrigText
-            task.delay(1.8, function()
-                if btnRef and btnRef.Parent and origRef then
-                    btnRef.Text = origRef
-                end
-            end)
+    isHopping = false
+    if activeTpBtn and activeTpBtn.Parent then
+        local msg = "⚠️ Error TP"
+        if teleportResult == Enum.TeleportResult.GameFull then
+            msg = "⚠️ Lleno (772)"
+        elseif teleportResult == Enum.TeleportResult.Unauthorized then
+            msg = "🔒 Privado"
         end
+        activeTpBtn.Text = msg
+        local btnRef, origRef = activeTpBtn, activeTpOrigText
+        activeTpBtn = nil
+        task.delay(1.8, function()
+            if btnRef and btnRef.Parent and origRef then
+                btnRef.Text = origRef
+            end
+        end)
     end
 end))
 
@@ -536,8 +539,8 @@ local function performServerHop(btn, sortOrder)
     if isHopping then return end
     isHopping = true
     local origText = btn.Text
-    activeHopBtn = btn
-    activeHopOrigText = origText
+    activeTpBtn = btn
+    activeTpOrigText = origText
     local order = sortOrder or "Desc"
     btn.Text = "🔍 Buscando servidor variado..."
 
@@ -561,7 +564,6 @@ local function performServerHop(btn, sortOrder)
                 local maxP = tonumber(srv.maxPlayers)
                 if srv.id and srv.id ~= game.JobId and playing and maxP then
                     local freeSlots = maxP - playing
-                    -- Margen de ~10 espacios libres para evitar Error 772 (si el mapa es muy chico, usa 25% de margen)
                     local minFree = (maxP >= 15) and 10 or math.max(3, math.floor(maxP * 0.25))
                     if freeSlots >= minFree and playing >= 1 then
                         table.insert(validServers, srv)
@@ -569,7 +571,6 @@ local function performServerHop(btn, sortOrder)
                 end
             end
 
-            -- Si no hubo con >= 10 espacios libres, relajar a >= 4 espacios libres
             if #validServers == 0 then
                 for _, srv in ipairs(res.data) do
                     local playing = tonumber(srv.playing)
@@ -580,7 +581,6 @@ local function performServerHop(btn, sortOrder)
                 end
             end
 
-            -- Filtrar los que todavía no visitaste
             local unvisited = {}
             for _, srv in ipairs(validServers) do
                 if not visited[srv.id] then
@@ -588,7 +588,6 @@ local function performServerHop(btn, sortOrder)
                 end
             end
 
-            -- Si ya pasaste por todos, reiniciar historial y volver a permitir los anteriores
             if #unvisited == 0 and #validServers > 0 then
                 VisitedStore[placeKey] = { [game.JobId] = true }
                 saveVisitedServers()
@@ -598,7 +597,6 @@ local function performServerHop(btn, sortOrder)
             end
 
             if #unvisited > 0 then
-                -- Elegir al azar entre los mejores candidatos para que sea bien variado
                 local poolSize = math.min(#unvisited, 15)
                 local chosen = unvisited[math.random(1, poolSize)]
                 markServerVisited(chosen.id)
@@ -1680,7 +1678,31 @@ TabVisuals:AddButton({
     Callback = RestoreMap
 })
 
--- --- PESTAÑA 3: JUGADORES (ORDENAMIENTO DINÁMICO + SPECTATE) ---
+-- --- PESTAÑA 3: JUGADORES EN SERVIDOR + AMIGOS CONECTADOS ---
+local SubTabBar = Instance.new("Frame")
+Stealth.RandomizeName(SubTabBar)
+SubTabBar.Size = UDim2.new(1, 0, 0, 22)
+SubTabBar.BackgroundTransparency = 1
+SubTabBar.Parent = TabPlayers.Page
+
+local function makeSubTabBtn(text, posX)
+    local b = Instance.new("TextButton")
+    Stealth.RandomizeName(b)
+    b.Size = UDim2.new(0.5, -2, 1, 0)
+    b.Position = posX
+    b.Text = text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 8
+    b.AutoButtonColor = false
+    b.Parent = SubTabBar
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    local st = applyNeonStroke(b, THEME.Accent, 0.5, 1)
+    return b, st
+end
+
+local SubServerBtn, subServerStroke   = makeSubTabBtn("🌐 En Servidor", UDim2.new(0, 0, 0, 0))
+local SubFriendsBtn, subFriendsStroke = makeSubTabBtn("⭐ Amigos",      UDim2.new(0.5, 2, 0, 0))
+
 local searchBox = Instance.new("TextBox")
 Stealth.RandomizeName(searchBox)
 searchBox.Size = UDim2.new(1, 0, 0, 24)
@@ -1718,21 +1740,17 @@ local PrevSpecBtn, prevSpecStroke = makeSpecNavBtn("◀", UDim2.new(0, 0, 0, 0),
 local SelfSpecBtn, selfSpecStroke = makeSpecNavBtn("🏠 Mi Cámara", UDim2.new(0, 32, 0, 0), UDim2.new(1, -64, 1, 0))
 local NextSpecBtn, nextSpecStroke = makeSpecNavBtn("▶", UDim2.new(1, -28, 0, 0),    UDim2.new(0, 28, 1, 0))
 
-registerThemeCallback(function(t)
-    searchBox.BackgroundColor3 = t.BgCard
-    searchBox.PlaceholderColor3 = t.TextMuted
-    searchBox.TextColor3 = t.TextMain
-    searchStroke.Color = t.Accent
-
-    for _, pair in ipairs({{PrevSpecBtn, prevSpecStroke}, {NextSpecBtn, nextSpecStroke}}) do
-        pair[1].BackgroundColor3 = t.BgCard
-        pair[1].TextColor3 = t.Accent
-        pair[2].Color = t.Accent
-    end
-    SelfSpecBtn.BackgroundColor3 = spectatingPlayer and t.BgCardOn or t.BgCard
-    SelfSpecBtn.TextColor3 = spectatingPlayer and t.AccentGreen or t.TextMuted
-    selfSpecStroke.Color = spectatingPlayer and t.AccentGreen or t.Accent
-end)
+local RefreshFriendsBtn = Instance.new("TextButton")
+Stealth.RandomizeName(RefreshFriendsBtn)
+RefreshFriendsBtn.Size = UDim2.new(1, 0, 0, 24)
+RefreshFriendsBtn.BackgroundTransparency = 0.15
+RefreshFriendsBtn.Text = "🔄 Actualizar Amigos Conectados"
+RefreshFriendsBtn.Font = Enum.Font.GothamBold
+RefreshFriendsBtn.TextSize = 9
+RefreshFriendsBtn.Visible = false
+RefreshFriendsBtn.Parent = TabPlayers.Page
+Instance.new("UICorner", RefreshFriendsBtn).CornerRadius = UDim.new(0, 6)
+local refreshFriendsStroke = applyNeonStroke(RefreshFriendsBtn, THEME.Accent, 0.4, 1)
 
 local PlayerListContainer = Instance.new("Frame")
 Stealth.RandomizeName(PlayerListContainer)
@@ -1746,7 +1764,62 @@ PlayerListLayout.Padding = UDim.new(0, 4)
 PlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerListLayout.Parent = PlayerListContainer
 
+local FriendsListContainer = Instance.new("Frame")
+Stealth.RandomizeName(FriendsListContainer)
+FriendsListContainer.Size = UDim2.new(1, 0, 0, 0)
+FriendsListContainer.AutomaticSize = Enum.AutomaticSize.Y
+FriendsListContainer.BackgroundTransparency = 1
+FriendsListContainer.Visible = false
+FriendsListContainer.Parent = TabPlayers.Page
+
+local FriendsListLayout = Instance.new("UIListLayout")
+FriendsListLayout.Padding = UDim.new(0, 4)
+FriendsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+FriendsListLayout.Parent = FriendsListContainer
+
 local playerCards = {}
+local friendCards = {}
+
+local function updatePlayersSubTabVisuals()
+    local isServer = (playersSubView == "Server")
+    SubServerBtn.BackgroundColor3 = isServer and THEME.Accent or THEME.BgCard
+    SubServerBtn.TextColor3 = isServer and THEME.BgMain or THEME.TextMuted
+    subServerStroke.Transparency = isServer and 0.1 or 0.7
+
+    SubFriendsBtn.BackgroundColor3 = (not isServer) and THEME.Accent or THEME.BgCard
+    SubFriendsBtn.TextColor3 = (not isServer) and THEME.BgMain or THEME.TextMuted
+    subFriendsStroke.Transparency = (not isServer) and 0.1 or 0.7
+
+    SpectateBar.Visible = isServer
+    PlayerListContainer.Visible = isServer
+    RefreshFriendsBtn.Visible = not isServer
+    FriendsListContainer.Visible = not isServer
+    searchBox.PlaceholderText = isServer and "🔍 Buscar jugador en sala..." or "🔍 Buscar amigo conectado..."
+end
+
+registerThemeCallback(function(t)
+    searchBox.BackgroundColor3 = t.BgCard
+    searchBox.PlaceholderColor3 = t.TextMuted
+    searchBox.TextColor3 = t.TextMain
+    searchStroke.Color = t.Accent
+
+    subServerStroke.Color = t.Accent
+    subFriendsStroke.Color = t.Accent
+    updatePlayersSubTabVisuals()
+
+    RefreshFriendsBtn.BackgroundColor3 = t.BgCard
+    RefreshFriendsBtn.TextColor3 = t.Accent
+    refreshFriendsStroke.Color = t.Accent
+
+    for _, pair in ipairs({{PrevSpecBtn, prevSpecStroke}, {NextSpecBtn, nextSpecStroke}}) do
+        pair[1].BackgroundColor3 = t.BgCard
+        pair[1].TextColor3 = t.Accent
+        pair[2].Color = t.Accent
+    end
+    SelfSpecBtn.BackgroundColor3 = spectatingPlayer and t.BgCardOn or t.BgCard
+    SelfSpecBtn.TextColor3 = spectatingPlayer and t.AccentGreen or t.TextMuted
+    selfSpecStroke.Color = spectatingPlayer and t.AccentGreen or t.Accent
+end)
 
 local function updateSpectateVisuals()
     SelfSpecBtn.BackgroundColor3 = spectatingPlayer and THEME.BgCardOn or THEME.BgCard
@@ -1814,7 +1887,209 @@ local function applyPlayerFilter()
             or string.find(string.lower(plr.Name), q, 1, true)
         data.Row.Visible = match ~= nil
     end
+    for _, data in ipairs(friendCards) do
+        local match = (q == "")
+            or string.find(string.lower(data.DisplayName), q, 1, true)
+            or string.find(string.lower(data.UserName), q, 1, true)
+            or string.find(string.lower(data.Location), q, 1, true)
+        data.Row.Visible = match ~= nil
+    end
 end
+
+-- 🔄 Cargar lista de Amigos Conectados y sus servidores/juegos
+local isRefreshingFriends = false
+local function refreshOnlineFriends()
+    if isRefreshingFriends then return end
+    isRefreshingFriends = true
+    RefreshFriendsBtn.Text = "⏳ Cargando amigos..."
+
+    task.spawn(function()
+        for _, child in ipairs(FriendsListContainer:GetChildren()) do
+            if child:IsA("GuiObject") then child:Destroy() end
+        end
+        table.clear(friendCards)
+
+        local ok, onlineList = pcall(function()
+            return LocalPlayer:GetFriendsOnline(200)
+        end)
+
+        if ok and type(onlineList) == "table" and #onlineList > 0 then
+            table.sort(onlineList, function(a, b)
+                local scoreA = (a.PlaceId and a.PlaceId > 0 and a.GameId and a.GameId ~= "") and 1 or ((a.PlaceId and a.PlaceId > 0) and 2 or 3)
+                local scoreB = (b.PlaceId and b.PlaceId > 0 and b.GameId and b.GameId ~= "") and 1 or ((b.PlaceId and b.PlaceId > 0) and 2 or 3)
+                if scoreA ~= scoreB then return scoreA < scoreB end
+                return tostring(a.DisplayName or a.UserName) < tostring(b.DisplayName or b.UserName)
+            end)
+
+            for idx, f in ipairs(onlineList) do
+                local userId = tonumber(f.VisitorId) or 0
+                local dName = tostring(f.DisplayName or f.UserName or "Amigo")
+                local uName = tostring(f.UserName or "")
+                local placeId = tonumber(f.PlaceId) or 0
+                local gameId = tostring(f.GameId or "")
+                local inSameServer = (gameId ~= "" and gameId == game.JobId)
+                local canJoinInstance = (placeId > 0 and gameId ~= "" and not inSameServer)
+                local canJoinPlace = (placeId > 0 and not canJoinInstance and not inSameServer)
+
+                local locText = tostring(f.LastLocation or "")
+                if locText == "" then
+                    locText = (placeId > 0) and "En un juego (Privado)" or "En línea (Web/Menú)"
+                end
+
+                local row = Instance.new("Frame")
+                Stealth.RandomizeName(row)
+                row.Size = UDim2.new(1, 0, 0, 32)
+                row.BackgroundColor3 = THEME.BgCard
+                row.BackgroundTransparency = 0.28
+                row.LayoutOrder = idx
+                row.Parent = FriendsListContainer
+                Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+                applyNeonStroke(row, canJoinInstance and THEME.AccentGreen or THEME.Accent, 0.72, 1)
+
+                local thumbImg = Instance.new("ImageLabel")
+                Stealth.RandomizeName(thumbImg)
+                thumbImg.Size = UDim2.new(0, 22, 0, 22)
+                thumbImg.Position = UDim2.new(0, 4, 0.5, -11)
+                thumbImg.BackgroundColor3 = THEME.BgHeader
+                thumbImg.BorderSizePixel = 0
+                thumbImg.Image = ""
+                thumbImg.Parent = row
+                Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
+
+                if userId > 0 then
+                    task.spawn(function()
+                        local tOk, url = pcall(function()
+                            return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+                        end)
+                        if thumbImg and thumbImg.Parent then
+                            thumbImg.Image = (tOk and url and url ~= "") and url
+                                or ("https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=150&height=150&format=png")
+                        end
+                    end)
+                end
+
+                local nameLbl = Instance.new("TextLabel")
+                Stealth.RandomizeName(nameLbl)
+                nameLbl.Size = UDim2.new(0.56, 0, 0, 14)
+                nameLbl.Position = UDim2.new(0, 30, 0, 3)
+                nameLbl.BackgroundTransparency = 1
+                nameLbl.Text = "⭐ " .. dName
+                nameLbl.TextColor3 = Color3.fromRGB(255, 215, 0)
+                nameLbl.Font = Enum.Font.GothamMedium
+                nameLbl.TextSize = 9
+                nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+                nameLbl.Parent = row
+
+                local gameLbl = Instance.new("TextLabel")
+                Stealth.RandomizeName(gameLbl)
+                gameLbl.Size = UDim2.new(0.56, 0, 0, 11)
+                gameLbl.Position = UDim2.new(0, 30, 0, 17)
+                gameLbl.BackgroundTransparency = 1
+                gameLbl.Text = inSameServer and "✅ En tu mismo servidor" or ("🎮 " .. locText)
+                gameLbl.TextColor3 = inSameServer and THEME.AccentGreen or THEME.TextMuted
+                gameLbl.Font = Enum.Font.Gotham
+                gameLbl.TextSize = 8
+                gameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                gameLbl.TextXAlignment = Enum.TextXAlignment.Left
+                gameLbl.Parent = row
+
+                local joinBtn = Instance.new("TextButton")
+                Stealth.RandomizeName(joinBtn)
+                joinBtn.Size = UDim2.new(0, 48, 0, 18)
+                joinBtn.Position = UDim2.new(1, -52, 0.5, -9)
+                joinBtn.Font = Enum.Font.GothamBold
+                joinBtn.TextSize = 7
+                joinBtn.Parent = row
+                Instance.new("UICorner", joinBtn).CornerRadius = UDim.new(0, 4)
+
+                if canJoinInstance then
+                    joinBtn.BackgroundColor3 = THEME.AccentGreen
+                    joinBtn.TextColor3 = THEME.BgMain
+                    joinBtn.Text = "UNIRSE"
+                    joinBtn.MouseButton1Click:Connect(function()
+                        if isHopping then return end
+                        isHopping = true
+                        activeTpBtn = joinBtn
+                        activeTpOrigText = "UNIRSE"
+                        joinBtn.Text = "⏳..."
+                        local tpOk = pcall(function()
+                            TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
+                        end)
+                        if not tpOk then
+                            isHopping = false
+                            joinBtn.Text = "Error"
+                            task.delay(1.5, function()
+                                if joinBtn and joinBtn.Parent then joinBtn.Text = "UNIRSE" end
+                            end)
+                        end
+                    end)
+                elseif canJoinPlace then
+                    joinBtn.BackgroundColor3 = THEME.Accent
+                    joinBtn.TextColor3 = THEME.BgMain
+                    joinBtn.Text = "JUEGO"
+                    joinBtn.MouseButton1Click:Connect(function()
+                        if isHopping then return end
+                        isHopping = true
+                        activeTpBtn = joinBtn
+                        activeTpOrigText = "JUEGO"
+                        joinBtn.Text = "⏳..."
+                        local tpOk = pcall(function()
+                            TeleportService:Teleport(placeId, LocalPlayer)
+                        end)
+                        if not tpOk then
+                            isHopping = false
+                            joinBtn.Text = "Error"
+                            task.delay(1.5, function()
+                                if joinBtn and joinBtn.Parent then joinBtn.Text = "JUEGO" end
+                            end)
+                        end
+                    end)
+                else
+                    joinBtn.BackgroundColor3 = THEME.SwitchOff
+                    joinBtn.TextColor3 = THEME.TextMuted
+                    joinBtn.AutoButtonColor = false
+                    joinBtn.Text = inSameServer and "AQUÍ" or "WEB"
+                end
+
+                table.insert(friendCards, {
+                    Row = row,
+                    DisplayName = dName,
+                    UserName = uName,
+                    Location = locText
+                })
+            end
+        else
+            local emptyLbl = Instance.new("TextLabel")
+            Stealth.RandomizeName(emptyLbl)
+            emptyLbl.Size = UDim2.new(1, 0, 0, 28)
+            emptyLbl.BackgroundTransparency = 1
+            emptyLbl.Text = "No hay amigos conectados en este momento."
+            emptyLbl.TextColor3 = THEME.TextMuted
+            emptyLbl.Font = Enum.Font.Gotham
+            emptyLbl.TextSize = 9
+            emptyLbl.Parent = FriendsListContainer
+        end
+
+        applyPlayerFilter()
+        RefreshFriendsBtn.Text = "🔄 Actualizar Amigos Conectados"
+        isRefreshingFriends = false
+    end)
+end
+
+SubServerBtn.MouseButton1Click:Connect(function()
+    playersSubView = "Server"
+    updatePlayersSubTabVisuals()
+    applyPlayerFilter()
+end)
+
+SubFriendsBtn.MouseButton1Click:Connect(function()
+    playersSubView = "Friends"
+    updatePlayersSubTabVisuals()
+    refreshOnlineFriends()
+end)
+
+RefreshFriendsBtn.MouseButton1Click:Connect(refreshOnlineFriends)
 
 local function createPlayerRow(p)
     if p == LocalPlayer or playerCards[p] then return end
@@ -1928,7 +2203,7 @@ end))
 
 task.spawn(function()
     while not hubUnloaded do
-        if MainFrame.Visible and ActiveTabName == "Jug." then
+        if MainFrame.Visible and ActiveTabName == "Jug." and playersSubView == "Server" then
             local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             for plr, data in pairs(playerCards) do
                 local tHrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
