@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.6.1 - Ultra Stealth & Modular / TP & Delete Fixed)
--- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Fix Raycast
+-- HUB: xcs (Neon Glass v3.6.1 - Ultra Stealth & Modular / Precision TP Fixed)
+-- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Precision Raycast
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -27,6 +27,7 @@ local Services = {
     TeleportService        = game:GetService("TeleportService"),
     VirtualUser            = game:GetService("VirtualUser"),
     ProximityPromptService = game:GetService("ProximityPromptService"),
+    GuiService             = game:GetService("GuiService"),
 }
 
 math.randomseed(tick() * 1000)
@@ -781,7 +782,7 @@ end
 do
     function Funcs.rebuildXRayFilter()
         table.clear(Modules.xrayFilterList)
-        table.insert(Modules.xrayFilterList, Camera)
+        table.insert(Modules.xrayFilterList, Services.Workspace.CurrentCamera or Camera)
         if LocalPlayer.Character then
             table.insert(Modules.xrayFilterList, LocalPlayer.Character)
         end
@@ -796,18 +797,25 @@ do
     function Funcs.SafeTeleport(targetCFrame)
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp then return end
+
+        if hum and hum.Sit then
+            hum.Sit = false
+        end
 
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
-        char:PivotTo(targetCFrame)
+        hrp.CFrame = targetCFrame
 
         task.spawn(function()
             Services.RunService.Heartbeat:Wait()
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-                char.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-                char:PivotTo(targetCFrame)
+            local c = LocalPlayer.Character
+            local root = c and c:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+                root.CFrame = targetCFrame
             end
         end)
     end
@@ -1508,11 +1516,12 @@ do
             Funcs.rebuildXRayFilter()
             Stealth.Disconnect(Modules.fpXRayConn)
             Modules.fpXRayConn = Services.RunService.RenderStepped:Connect(function()
-                if not State.FPXRay or not LocalPlayer.Character then return end
+                local cam = Services.Workspace.CurrentCamera
+                if not State.FPXRay or not LocalPlayer.Character or not cam then return end
                 clearXRayParts()
 
-                local rayOrigin = Camera.CFrame.Position
-                local rayDirection = Camera.CFrame.LookVector * 250
+                local rayOrigin = cam.CFrame.Position
+                local rayDirection = cam.CFrame.LookVector * 250
                 local currentOrigin = rayOrigin
 
                 for _ = 1, 5 do
@@ -1569,11 +1578,12 @@ do
     end
 
     local function getMoveDirection()
+        local cam = Services.Workspace.CurrentCamera
         local c = LocalPlayer.Character
         local hum = c and c:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.MoveDirection.Magnitude == 0 then return Vector3.zero end
-        local move = Camera.CFrame:VectorToObjectSpace(hum.MoveDirection)
-        return (Camera.CFrame * CFrame.new(move.X, 0, move.Z)).Position - Camera.CFrame.Position
+        if not hum or not cam or hum.MoveDirection.Magnitude == 0 then return Vector3.zero end
+        local move = cam.CFrame:VectorToObjectSpace(hum.MoveDirection)
+        return (cam.CFrame * CFrame.new(move.X, 0, move.Z)).Position - cam.CFrame.Position
     end
 
     local function cleanupFlyPhysics()
@@ -1628,17 +1638,18 @@ do
 
             Modules.flyConn = Services.RunService.RenderStepped:Connect(function()
                 if not State.Fly then return end
+                local cam = Services.Workspace.CurrentCamera
                 local c = LocalPlayer.Character
-                if not c or not c:FindFirstChild("HumanoidRootPart") or not Modules.flyLinearVel or not Modules.flyAlignOri then return end
+                if not cam or not c or not c:FindFirstChild("HumanoidRootPart") or not Modules.flyLinearVel or not Modules.flyAlignOri then return end
 
                 local speed = Config.FlySpeed * (Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 2 or 1)
                 local moveVector = Vector3.zero
 
                 if Services.UserInputService.KeyboardEnabled then
-                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector += Camera.CFrame.LookVector end
-                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector -= Camera.CFrame.LookVector end
-                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector -= Camera.CFrame.RightVector end
-                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector += Camera.CFrame.RightVector end
+                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVector += cam.CFrame.LookVector end
+                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVector -= cam.CFrame.LookVector end
+                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVector -= cam.CFrame.RightVector end
+                    if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then moveVector += cam.CFrame.RightVector end
                     if Services.UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVector += Vector3.yAxis end
                     if Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveVector -= Vector3.yAxis end
                 else
@@ -1646,7 +1657,7 @@ do
                 end
 
                 Modules.flyLinearVel.VectorVelocity = moveVector.Magnitude > 0 and (moveVector.Unit * speed) or Vector3.zero
-                Modules.flyAlignOri.CFrame = Camera.CFrame
+                Modules.flyAlignOri.CFrame = cam.CFrame
             end)
         else
             cleanupFlyPhysics()
@@ -1656,21 +1667,23 @@ do
     function Funcs.toggleFreeCam(state)
         State.FreeCam = state
         Funcs.syncQuickBtnVisual("FreeCam", state)
-        if state then
+        local cam = Services.Workspace.CurrentCamera
+        if state and cam then
             if State.Fly then Funcs.setFeatureState("Fly", false) end
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum then hum.WalkSpeed = 0; hum.JumpPower = 0 end
 
-            Camera.CameraType = Enum.CameraType.Scriptable
-            local look = Camera.CFrame.LookVector
+            cam.CameraType = Enum.CameraType.Scriptable
+            local look = cam.CFrame.LookVector
             Modules.camYaw = math.atan2(-look.X, -look.Z)
             Modules.camPitch = math.asin(look.Y)
-            Modules.camPos = Camera.CFrame.Position
+            Modules.camPos = cam.CFrame.Position
 
             Stealth.Disconnect(Modules.freeCamConn)
             Modules.freeCamConn = Services.RunService.RenderStepped:Connect(function(dt)
-                if not State.FreeCam then return end
+                local activeCam = Services.Workspace.CurrentCamera
+                if not State.FreeCam or not activeCam then return end
                 local rot = CFrame.fromEulerAnglesYXZ(Modules.camPitch, Modules.camYaw, 0)
                 local moveVector = Vector3.zero
                 local speed = Config.FreeCamSpeed * (Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 2 or 1)
@@ -1686,7 +1699,7 @@ do
                     local c = LocalPlayer.Character
                     local h = c and c:FindFirstChildOfClass("Humanoid")
                     if h and h.MoveDirection.Magnitude > 0.05 then
-                        local localMove = Camera.CFrame:VectorToObjectSpace(h.MoveDirection)
+                        local localMove = activeCam.CFrame:VectorToObjectSpace(h.MoveDirection)
                         moveVector = (rot.LookVector * -localMove.Z) + (rot.RightVector * localMove.X)
                     end
                 end
@@ -1694,7 +1707,7 @@ do
                 if moveVector.Magnitude > 0 then
                     Modules.camPos += moveVector.Unit * speed * dt
                 end
-                Camera.CFrame = CFrame.new(Modules.camPos, Modules.camPos + rot.LookVector)
+                activeCam.CFrame = CFrame.new(Modules.camPos, Modules.camPos + rot.LookVector)
             end)
 
             Stealth.Disconnect(Modules.freeCamRotateConn)
@@ -1711,7 +1724,7 @@ do
             Modules.freeCamConn = nil
             Stealth.Disconnect(Modules.freeCamRotateConn)
             Modules.freeCamRotateConn = nil
-            Camera.CameraType = Enum.CameraType.Custom
+            if cam then cam.CameraType = Enum.CameraType.Custom end
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum then hum.WalkSpeed = 16; hum.JumpPower = 50 end
@@ -2785,8 +2798,9 @@ do
 
     function Funcs.resetSpectate()
         Runtime.spectatingPlayer = nil
+        local cam = Services.Workspace.CurrentCamera
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then Camera.CameraSubject = hum end
+        if hum and cam then cam.CameraSubject = hum end
         Funcs.updateSpectateVisuals()
     end
 
@@ -2796,9 +2810,10 @@ do
             return
         end
         Runtime.spectatingPlayer = targetPlayer
+        local cam = Services.Workspace.CurrentCamera
         local rig = Funcs.getPlayerRig(targetPlayer)
         local hum = rig and rig:FindFirstChildOfClass("Humanoid")
-        if hum then Camera.CameraSubject = hum end
+        if hum and cam then cam.CameraSubject = hum end
         Funcs.updateSpectateVisuals()
     end
 
@@ -3534,7 +3549,7 @@ end
 task.wait()
 
 -- ==========================================
--- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES (CORREGIDO Y OPTIMIZADO)
+-- 🖱️ PASO 6 DE CARGA: BOTONES RÁPIDOS Y EVENTOS GLOBALES
 -- ==========================================
 do
     local function makeDraggable(dragHandle, targetFrame, saveKey, respectLock)
@@ -3564,8 +3579,9 @@ do
                     dragging = false
                     return
                 end
+                local cam = Services.Workspace.CurrentCamera or Camera
                 local delta = input.Position - dragStart
-                local vp = Camera.ViewportSize
+                local vp = cam.ViewportSize
                 local newX = math.clamp(startPos.X.Offset + delta.X, 0, math.max(0, vp.X - targetFrame.AbsoluteSize.X))
                 local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, math.max(0, vp.Y - targetFrame.AbsoluteSize.Y))
                 targetFrame.Position = UDim2.new(0, newX, 0, newY)
@@ -3615,8 +3631,9 @@ do
                 if Config.LockButtons then return end
                 if (input.Position - dragStartScreen).Magnitude > 6 then
                     isDragging = true
+                    local cam = Services.Workspace.CurrentCamera or Camera
                     local delta = input.Position - dragStartScreen
-                    local vp = Camera.ViewportSize
+                    local vp = cam.ViewportSize
                     local newX = math.clamp(initBtnPos.X.Offset + delta.X, 0, math.max(0, vp.X - btn.AbsoluteSize.X))
                     local newY = math.clamp(initBtnPos.Y.Offset + delta.Y, 0, math.max(0, vp.Y - btn.AbsoluteSize.Y))
                     btn.Position = UDim2.new(0, newX, 0, newY)
@@ -3693,24 +3710,59 @@ do
         UI.MiniBtn.Visible = false
     end)
 
-    -- 🎯 Raycast e Inputs Corregidos (ViewportPointToRay + GetMouseLocation)
+    -- 🎯 Raycast e Inputs de Alta Precisión (PC + Táctil)
     local function raycastIgnoringDeleted(origin, direction)
-        local filter = {LocalPlayer.Character, Camera}
+        local cam = Services.Workspace.CurrentCamera
+        local filter = {LocalPlayer.Character, cam}
         for _, p in ipairs(Services.Players:GetPlayers()) do
             if p.Character then table.insert(filter, p.Character) end
         end
         for _, data in ipairs(Modules.deletedPartsMemory) do
             if data.part and data.part.Parent then table.insert(filter, data.part) end
         end
+
         local params = RaycastParams.new()
         params.FilterDescendantsInstances = filter
         params.FilterType = Enum.RaycastFilterType.Exclude
-        return Services.Workspace:Raycast(origin, direction, params)
+        params.IgnoreWater = true
+
+        local currentOrigin = origin
+        local remainingDist = direction.Magnitude
+        local unitDir = direction.Unit
+
+        for _ = 1, 10 do
+            local result = Services.Workspace:Raycast(currentOrigin, unitDir * remainingDist, params)
+            if not result then return nil end
+
+            local hit = result.Instance
+            if hit and hit:IsA("BasePart") and not hit.CanCollide and hit.Transparency >= 0.85 then
+                table.insert(filter, hit)
+                params.FilterDescendantsInstances = filter
+                local traveled = (result.Position - currentOrigin).Magnitude
+                remainingDist -= (traveled + 0.05)
+                if remainingDist <= 0 then return nil end
+                currentOrigin = result.Position + unitDir * 0.05
+            else
+                return result
+            end
+        end
+        return nil
     end
 
-    local function DeletePartAt(screenPos)
-        local ray = Camera:ViewportPointToRay(screenPos.X, screenPos.Y)
-        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
+    local function buildCameraRay(screenPos, isViewportSpace)
+        local cam = Services.Workspace.CurrentCamera
+        if not cam then return nil end
+        if isViewportSpace then
+            return cam:ViewportPointToRay(screenPos.X, screenPos.Y)
+        else
+            return cam:ScreenPointToRay(screenPos.X, screenPos.Y)
+        end
+    end
+
+    local function DeletePartAt(screenPos, isViewportSpace)
+        local ray = buildCameraRay(screenPos, isViewportSpace)
+        if not ray then return end
+        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1500)
         local part = result and result.Instance
         if part and part:IsA("BasePart") and not part:FindFirstAncestorOfClass("Accessory") then
             table.insert(Modules.deletedPartsMemory, {part = part, trans = part.Transparency, collide = part.CanCollide})
@@ -3719,12 +3771,29 @@ do
         end
     end
 
-    local function TeleportAt(screenPos)
-        local ray = Camera:ViewportPointToRay(screenPos.X, screenPos.Y)
-        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1000)
-        if result then
-            Funcs.SafeTeleport(CFrame.new(result.Position + Vector3.new(0, 3.5, 0)))
+    local function TeleportAt(screenPos, isViewportSpace)
+        local ray = buildCameraRay(screenPos, isViewportSpace)
+        if not ray then return end
+        local result = raycastIgnoringDeleted(ray.Origin, ray.Direction * 1500)
+        if not result then return end
+
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp then return end
+
+        local halfHeight = (hum and hum.RigType == Enum.HumanoidRigType.R6)
+            and (2 + hrp.Size.Y * 0.5)
+            or ((hum and hum.HipHeight or 2) + hrp.Size.Y * 0.5)
+
+        local targetPos
+        if result.Normal.Y >= 0.5 then
+            targetPos = result.Position + Vector3.new(0, halfHeight + 0.05, 0)
+        else
+            targetPos = result.Position + (result.Normal * 1.6) + Vector3.new(0, halfHeight * 0.5, 0)
         end
+
+        Funcs.SafeTeleport(CFrame.new(targetPos) * hrp.CFrame.Rotation)
     end
 
     HubMaid:GiveTask(Services.UserInputService.JumpRequest:Connect(function()
@@ -3752,19 +3821,22 @@ do
             if isKeyMatch(codeName, kb.ESP)        then Funcs.setFeatureState("ESP",        not State.ESP) end
             if isKeyMatch(codeName, kb.InfJump)    then Funcs.setFeatureState("InfJump",    not State.InfJump) end
             if isKeyMatch(codeName, kb.Restore)    then Funcs.RestoreMap() end
-            if isKeyMatch(codeName, kb.Teleport)   then TeleportAt(Services.UserInputService:GetMouseLocation()) end
-            if isKeyMatch(codeName, kb.Delete)     then DeletePartAt(Services.UserInputService:GetMouseLocation()) end
+            if isKeyMatch(codeName, kb.Teleport)   then TeleportAt(Services.UserInputService:GetMouseLocation(), true) end
+            if isKeyMatch(codeName, kb.Delete)     then DeletePartAt(Services.UserInputService:GetMouseLocation(), true) end
         end
     end))
 
-    local function isOverGui(pos)
+    local function isOverGui(guiSpacePos)
         if not UI.ScreenGui or not UI.ScreenGui.Parent then return false end
+        local inset = Services.GuiService:GetGuiInset()
+        local vx, vy = guiSpacePos.X + inset.X, guiSpacePos.Y + inset.Y
+
         local function isPointInside(guiObj)
             if not guiObj or not guiObj.Visible then return false end
             local absPos = guiObj.AbsolutePosition
             local absSize = guiObj.AbsoluteSize
-            return pos.X >= absPos.X and pos.X <= (absPos.X + absSize.X)
-               and pos.Y >= absPos.Y and pos.Y <= (absPos.Y + absSize.Y)
+            return vx >= absPos.X and vx <= (absPos.X + absSize.X)
+               and vy >= absPos.Y and vy <= (absPos.Y + absSize.Y)
         end
 
         if isPointInside(UI.MainFrame) or isPointInside(UI.MiniBtn) then
@@ -3778,22 +3850,26 @@ do
         return false
     end
 
-    local touchState = { active = false, startTime = 0, totalMoved = 0, isCameraDrag = false }
+    local touchState = { active = false, startTime = 0, isCameraDrag = false, startPos = Vector2.zero }
     HubMaid:GiveTask(Services.UserInputService.InputBegan:Connect(function(input, gp)
         if gp or Runtime.hubUnloaded then return end
         if input.UserInputType == Enum.UserInputType.Touch then
+            local pos = Vector2.new(input.Position.X, input.Position.Y)
+            if isOverGui(pos) then return end
             touchState.active = true
             touchState.startTime = os.clock()
-            touchState.totalMoved = 0
             touchState.isCameraDrag = false
+            touchState.startPos = pos
         end
     end))
 
     HubMaid:GiveTask(Services.UserInputService.InputChanged:Connect(function(input, gp)
         if gp or Runtime.hubUnloaded then return end
         if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
-            touchState.totalMoved += input.Delta.Magnitude
-            if touchState.totalMoved > 12 then touchState.isCameraDrag = true end
+            local currentPos = Vector2.new(input.Position.X, input.Position.Y)
+            if (currentPos - touchState.startPos).Magnitude > 14 then
+                touchState.isCameraDrag = true
+            end
         end
     end))
 
@@ -3801,11 +3877,11 @@ do
         if gp or Runtime.hubUnloaded then return end
         if input.UserInputType == Enum.UserInputType.Touch and touchState.active then
             touchState.active = false
-            if (os.clock() - touchState.startTime) < 0.35 and not touchState.isCameraDrag and not isOverGui(input.Position) then
+            if (os.clock() - touchState.startTime) < 0.4 and not touchState.isCameraDrag then
                 if State.DeleteMode then
-                    DeletePartAt(input.Position)
+                    DeletePartAt(touchState.startPos, false)
                 elseif State.TPS then
-                    TeleportAt(input.Position)
+                    TeleportAt(touchState.startPos, false)
                 end
             end
         end
