@@ -1,6 +1,6 @@
 -- ==========================================
--- HUB: xcs (Neon Glass v3.6.1 - Ultra Stealth & Modular / Precision TP Fixed)
--- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Precision Raycast
+-- HUB: xcs (Neon Glass v3.6.2 - Ultra Stealth & Modular / Precision TP + Best Ping Hop)
+-- Blindaje Total + ESP Multi-Rig + Hitbox + Waypoints + Mute + Friends + Precision Raycast + Ping Hop
 -- ==========================================
 
 if not game:IsLoaded() then
@@ -524,7 +524,7 @@ end
 task.wait()
 
 -- ==========================================
--- ⚡ MÓDULO DE RENDIMIENTO, SESIÓN Y SERVER HOP
+-- ⚡ MÓDULO DE RENDIMIENTO, SESIÓN Y SERVER HOP (MEJOR PING)
 -- ==========================================
 do
     local SERVERS_FILE = "xcs_servers.json"
@@ -687,46 +687,58 @@ do
         end
     end))
 
-    function Funcs.performServerHop(btn, sortOrder)
+    function Funcs.performServerHop(btn, mode)
         if Runtime.isHopping then return end
         Runtime.isHopping = true
         local origText = btn.Text
         Runtime.activeTpBtn = btn
         Runtime.activeTpOrigText = origText
-        local order = sortOrder or "Desc"
-        btn.Text = "🔍 Buscando servidor..."
+        local hopMode = mode or "BestPing"
+        local apiOrder = (hopMode == "Asc") and "Asc" or "Desc"
+        btn.Text = "🔍 Buscando mejor ping..."
 
         task.spawn(function()
             local placeKey = tostring(game.PlaceId)
             local visited = Modules.visitedStore[placeKey] or {}
+            local collected = {}
+            local cursor = nil
 
-            local ok, res = pcall(function()
-                local url = string.format(
-                    "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=%s&limit=100",
-                    game.PlaceId, order
-                )
-                return Services.HttpService:JSONDecode(game:HttpGet(url))
-            end)
+            for _ = 1, 2 do
+                local ok, res = pcall(function()
+                    local url = string.format(
+                        "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=%s&limit=100%s",
+                        game.PlaceId,
+                        apiOrder,
+                        cursor and ("&cursor=" .. Services.HttpService:UrlEncode(cursor)) or ""
+                    )
+                    return Services.HttpService:JSONDecode(game:HttpGet(url))
+                end)
 
-            if ok and res and type(res.data) == "table" then
+                if ok and res and type(res.data) == "table" then
+                    for _, srv in ipairs(res.data) do
+                        table.insert(collected, srv)
+                    end
+                    cursor = res.nextPageCursor
+                    if not cursor or cursor == "" then break end
+                else
+                    break
+                end
+            end
+
+            if #collected > 0 then
                 local validServers = {}
-                for _, srv in ipairs(res.data) do
+                for _, srv in ipairs(collected) do
                     local playing = tonumber(srv.playing)
                     local maxP = tonumber(srv.maxPlayers)
                     if srv.id and srv.id ~= game.JobId and playing and maxP then
                         local freeSlots = maxP - playing
-                        local minFree = (maxP >= 15) and 10 or math.max(3, math.floor(maxP * 0.25))
-                        if freeSlots >= minFree and playing >= 1 then
-                            table.insert(validServers, srv)
-                        end
-                    end
-                end
+                        local minFree = (hopMode == "BestPing") and 2
+                            or ((maxP >= 15) and 6 or math.max(2, math.floor(maxP * 0.2)))
 
-                if #validServers == 0 then
-                    for _, srv in ipairs(res.data) do
-                        local playing = tonumber(srv.playing)
-                        local maxP = tonumber(srv.maxPlayers)
-                        if srv.id and srv.id ~= game.JobId and playing and maxP and (maxP - playing) >= 4 then
+                        if freeSlots >= minFree and playing >= 1 then
+                            local rawPing = tonumber(srv.ping)
+                            srv._cleanPing = (rawPing and rawPing > 0) and rawPing or 9999
+                            srv._cleanFps = tonumber(srv.fps) or 0
                             table.insert(validServers, srv)
                         end
                     end
@@ -744,15 +756,26 @@ do
                     saveVisitedServers()
                     unvisited = validServers
                     btn.Text = "🔄 Lista reiniciada..."
-                    task.wait(0.4)
+                    task.wait(0.35)
                 end
 
                 if #unvisited > 0 then
-                    local poolSize = math.min(#unvisited, 15)
-                    local chosen = unvisited[math.random(1, poolSize)]
+                    table.sort(unvisited, function(a, b)
+                        if a._cleanPing ~= b._cleanPing then
+                            return a._cleanPing < b._cleanPing
+                        end
+                        return a._cleanFps > b._cleanFps
+                    end)
+
+                    local topPool = math.min(#unvisited, 3)
+                    local chosen = unvisited[math.random(1, topPool)]
                     markServerVisited(chosen.id)
 
-                    btn.Text = "✅ Entrando (" .. chosen.playing .. "/" .. chosen.maxPlayers .. ")..."
+                    local pingTag = (chosen._cleanPing < 9999)
+                        and (" • " .. math.floor(chosen._cleanPing) .. "ms")
+                        or ""
+                    btn.Text = string.format("✅ Entrando (%d/%d%s)...", chosen.playing, chosen.maxPlayers, pingTag)
+
                     local tpOk = pcall(function()
                         Services.TeleportService:TeleportToPlaceInstance(game.PlaceId, chosen.id, LocalPlayer)
                     end)
@@ -1749,7 +1772,7 @@ do
 
     local header = Stealth.New("TextButton", mainFrame)
     header.Size = UDim2.new(1, 0, 0, 32)
-    header.Text = "   ◈ xcs Hub  v3.6.1"
+    header.Text = "   ◈ xcs Hub  v3.6.2"
     header.Font = Enum.Font.GothamBold
     header.TextSize = 11
     header.TextXAlignment = Enum.TextXAlignment.Left
@@ -3357,8 +3380,9 @@ do
     })
 
     TabConfig:AddButton({ Title = "🔁 Rejoin (Reconectar Servidor)", Callback = Funcs.performRejoin })
-    TabConfig:AddButton({ Title = "🔥 Server Hop (Con Gente / Variado)", Callback = function(btn) Funcs.performServerHop(btn, "Desc") end })
-    TabConfig:AddButton({ Title = "🌐 Server Hop (Tranquilo / Variado)", Callback = function(btn) Funcs.performServerHop(btn, "Asc") end })
+    TabConfig:AddButton({ Title = "⚡ Server Hop (Mejor Ping)", Callback = function(btn) Funcs.performServerHop(btn, "BestPing") end })
+    TabConfig:AddButton({ Title = "🔥 Server Hop (Con Gente + Buen Ping)", Callback = function(btn) Funcs.performServerHop(btn, "Desc") end })
+    TabConfig:AddButton({ Title = "🌐 Server Hop (Tranquilo + Buen Ping)", Callback = function(btn) Funcs.performServerHop(btn, "Asc") end })
 
     TabConfig:AddSection("Apariencia y Escala")
 
